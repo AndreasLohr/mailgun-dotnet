@@ -276,7 +276,11 @@ public sealed class MailgunMessageBuilder
         ArgumentNullException.ThrowIfNull(items);
         foreach (var item in items)
         {
-            ArgumentNullException.ThrowIfNull(item);
+            // Reject empty / whitespace-only entries — matches the per-key validation in
+            // .Header / .TemplateVariable / .CustomVariable / .Option. The previous null-only
+            // check let an empty recipient through, where it round-tripped to Mailgun as
+            // `to=&` and produced a 400 instead of failing fast at the call site.
+            ArgumentException.ThrowIfNullOrWhiteSpace(item);
             target.Add(item);
         }
         return this;

@@ -55,18 +55,38 @@ internal sealed class RateLimitHandler : DelegatingHandler
 
     /// <summary>
     /// True when the request hits a Mailgun action endpoint that generates a side-effect every call,
-    /// regardless of HTTP method semantics. <c>PUT /v1/dkim_management/{domain}/rotate-dkim-key</c>
+    /// regardless of HTTP method semantics. <c>POST /v1/dkim_management/domains/{name}/rotate</c>
     /// is the canonical case — each call generates a brand-new DKIM key. Retrying on a transient
     /// 5xx after the server already rotated would silently double-rotate, leaving the caller without
     /// the first key's public material and the DNS state pointing at a superseded key.
     /// </summary>
+    /// <remarks>
+    /// The matching is anchored to the LAST path segment to avoid false positives — substring
+    /// matching catches domain names like <c>refresh-club.com</c> or <c>rotate-tracking.com</c>
+    /// that contain these tokens but appear in middle path segments. We also exclude segments
+    /// containing a dot (i.e. domain-shaped) so a single-segment path of <c>/v3/domains/{name}</c>
+    /// where the name happens to start with <c>refresh-</c> doesn't false-positive either.
+    /// </remarks>
     private static bool IsActionEndpoint(Uri? uri)
     {
         if (uri is null) return false;
-        var path = uri.AbsolutePath;
-        return path.Contains("/rotate", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("/regenerate", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("/refresh", StringComparison.OrdinalIgnoreCase);
+        var path = uri.AbsolutePath.AsSpan();
+        var lastSlash = path.LastIndexOf('/');
+        if (lastSlash < 0) return false;
+        var lastSegment = path[(lastSlash + 1)..];
+        return StartsWithActionVerb(lastSegment, "rotate")
+            || StartsWithActionVerb(lastSegment, "regenerate")
+            || StartsWithActionVerb(lastSegment, "refresh");
+    }
+
+    private static bool StartsWithActionVerb(ReadOnlySpan<char> segment, string verb)
+    {
+        // Domain-shaped segments (contain a dot) are never action verbs.
+        if (segment.Contains('.')) return false;
+        if (!segment.StartsWith(verb, StringComparison.OrdinalIgnoreCase)) return false;
+        // Match either an exact-segment (e.g. "rotate") or a hyphen-suffix segment
+        // (e.g. "rotate-dkim-key"). "rotations" or "refreshing" don't qualify.
+        return segment.Length == verb.Length || segment[verb.Length] == '-';
     }
 
     private static TimeSpan ComputeDelay(HttpResponseMessage response, int attempt)

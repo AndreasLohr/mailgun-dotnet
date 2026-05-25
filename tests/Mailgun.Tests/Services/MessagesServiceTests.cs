@@ -104,6 +104,40 @@ public class MessagesServiceTests
     }
 
     [Fact]
+    public async Task Send_merges_TemplateVariables_and_CustomVariables_emitting_each_v_key_once()
+    {
+        // Regression: TemplateVariables and CustomVariables share the v:* form-field namespace
+        // on the wire. Previously the SDK serialized both dictionaries separately, producing
+        // duplicate v:my_key fields when the same key appeared in both — Mailgun's last-write
+        // semantics then silently dropped one. The SDK now merges client-side with
+        // TemplateVariables winning on collision.
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(System.Net.HttpStatusCode.OK, "{\"id\":\"x\",\"message\":\"ok\"}");
+
+        await client.Messages.SendAsync("mg.example.com", new SendMessageRequest
+        {
+            From = "x@mg.example.com",
+            To = { "y@example.com" },
+            Subject = "s",
+            Text = "t",
+            TemplateVariables = { ["shared_key"] = "from_template", ["only_template"] = "t" },
+            CustomVariables   = { ["shared_key"] = "from_custom",   ["only_custom"] = "c" },
+        });
+
+        var req = Assert.Single(handler.Requests);
+        var body = req.Body!;
+        // shared_key wins from TemplateVariables; from_custom must NOT appear in the body.
+        Assert.Contains("v%3Ashared_key=from_template", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("v%3Ashared_key=from_custom", body, StringComparison.Ordinal);
+        // Exactly one occurrence of the merged key.
+        var matches = System.Text.RegularExpressions.Regex.Matches(body, @"v%3Ashared_key=");
+        Assert.Single(matches);
+        // Both unique-to-one-dictionary keys still survive.
+        Assert.Contains("v%3Aonly_template=t", body, StringComparison.Ordinal);
+        Assert.Contains("v%3Aonly_custom=c", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Send_omits_amp_html_when_null()
     {
         var (client, handler) = TestMailgunClient.Create();

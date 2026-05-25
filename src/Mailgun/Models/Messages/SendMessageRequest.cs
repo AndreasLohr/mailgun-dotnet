@@ -59,7 +59,15 @@ public sealed class SendMessageRequest
     /// <summary>Custom MIME headers (Mailgun <c>h:Header-Name</c>).</summary>
     public Dictionary<string, string> CustomHeaders { get; } = new();
 
-    /// <summary>Custom variables (Mailgun <c>v:variable-name</c>); separate from template variables — these reach event payloads.</summary>
+    /// <summary>
+    /// Custom variables (Mailgun <c>v:variable-name</c>). Reach event payloads (delivery/bounce/etc).
+    /// <para>
+    /// <strong>Wire-format note:</strong> on the actual HTTP request these share the <c>v:</c> form-field
+    /// namespace with <see cref="TemplateVariables"/>. If you set the same key in both dictionaries the
+    /// SDK emits it exactly once with the value from <see cref="TemplateVariables"/> (last-write semantics
+    /// would be Mailgun's behavior on a duplicate, but the SDK normalizes client-side to avoid the duplicate).
+    /// </para>
+    /// </summary>
     public Dictionary<string, string> CustomVariables { get; } = new();
 
     /// <summary>Sets <c>o:testmode</c> = yes; messages are accepted but never delivered.</summary>

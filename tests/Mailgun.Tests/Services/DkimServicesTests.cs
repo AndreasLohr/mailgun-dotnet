@@ -211,36 +211,46 @@ public class DkimServicesTests
     // ── DKIM Security ──
 
     [Fact]
-    public async Task DkimSecurity_Rotate_puts_to_rotate_subpath()
+    public async Task DkimSecurity_Rotate_posts_to_domains_rotate_subpath()
     {
+        // Mailgun's documented endpoint is POST /v1/dkim_management/domains/{name}/rotate,
+        // NOT PUT /v1/dkim_management/{domain}/rotate-dkim-key (which was a fabricated URL).
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
 
         await client.DkimSecurity.RotateAsync("mg.example.com");
 
         var req = Assert.Single(handler.Requests);
-        Assert.Equal(HttpMethod.Put, req.Method);
-        Assert.EndsWith("/v1/dkim_management/mg.example.com/rotate-dkim-key", req.Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Post, req.Method);
+        Assert.EndsWith("/v1/dkim_management/domains/mg.example.com/rotate", req.Uri.AbsolutePath);
     }
 
     [Fact]
-    public async Task DkimSecurity_GetAutoRotation_and_SetAutoRotation_round_trip_json()
+    public async Task DkimSecurity_GetAutoRotation_and_SetAutoRotation_hit_documented_paths_and_shape()
     {
+        // GET  /v1/dkim_management/domains/{name}/rotation  — JSON in
+        // PUT  /v1/dkim_management/domains/{name}/rotation  — multipart/form-data with rotation_enabled
         var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"enabled\":true,\"rotation_interval\":\"90d\",\"bits\":2048}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"enabled\":false,\"rotation_interval\":\"180d\"}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"rotation_enabled\":true,\"rotation_interval\":\"5d\"}");
+        handler.EnqueueResponse(HttpStatusCode.NoContent, string.Empty);
 
         var got = await client.DkimSecurity.GetAutoRotationAsync("mg.example.com");
         await client.DkimSecurity.SetAutoRotationAsync("mg.example.com", new DkimAutoRotationPolicy
         {
-            Enabled = false,
-            RotationInterval = "180d",
+            RotationEnabled = false,
+            RotationInterval = "30d",
         });
 
-        Assert.True(got.Enabled);
-        Assert.Equal("90d", got.RotationInterval);
+        Assert.True(got.RotationEnabled);
+        Assert.Equal("5d", got.RotationInterval);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.EndsWith("/v1/dkim_management/domains/mg.example.com/rotation", handler.Requests[0].Uri.AbsolutePath);
+
         Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
-        Assert.Contains("\"enabled\":false", handler.Requests[1].Body!, StringComparison.Ordinal);
-        Assert.Contains("\"rotation_interval\":\"180d\"", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.EndsWith("/v1/dkim_management/domains/mg.example.com/rotation", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Equal("multipart/form-data", handler.Requests[1].ContentType);
+        Assert.Contains("rotation_enabled", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.Contains("rotation_interval", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.Contains("30d", handler.Requests[1].Body!, StringComparison.Ordinal);
     }
 }

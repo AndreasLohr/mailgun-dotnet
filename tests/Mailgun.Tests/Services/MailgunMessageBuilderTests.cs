@@ -210,6 +210,21 @@ public class MailgunMessageBuilderTests
     }
 
     [Fact]
+    public void Collection_setters_reject_empty_string_entries()
+    {
+        // Regression: AddRange previously only ThrowIfNull-checked items. Empty/whitespace
+        // entries slipped through and shipped as `to=&` on the wire, producing a server-side 400
+        // instead of failing fast at the call site.
+        var (client, _) = TestMailgunClient.Create();
+        var b = client.Messages.NewMessage();
+        Assert.Throws<ArgumentException>(() => b.To("a@example.com", "", "c@example.com"));
+        Assert.Throws<ArgumentException>(() => b.Cc("a@example.com", "  "));
+        Assert.Throws<ArgumentException>(() => b.Bcc(""));
+        Assert.Throws<ArgumentException>(() => b.Tag(""));
+        Assert.Throws<ArgumentException>(() => b.Campaign("", "valid"));
+    }
+
+    [Fact]
     public void AmpHtml_setter_populates_request_AmpHtml()
     {
         var (client, _) = TestMailgunClient.Create();

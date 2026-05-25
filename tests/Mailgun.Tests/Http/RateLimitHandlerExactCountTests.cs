@@ -60,20 +60,70 @@ public class RateLimitHandlerExactCountTests
     }
 
     [Fact]
-    public async Task Action_endpoint_path_is_not_retried_on_5xx_even_with_idempotent_method()
+    public async Task Rotate_endpoint_uses_POST_which_is_already_non_retried_on_5xx()
     {
-        // Regression for #21: DkimSecurity.RotateAsync uses PUT, which the handler normally treats
-        // as idempotent + retries on 5xx. But each /rotate-dkim-key call generates a brand-new
-        // DKIM key, so retrying after a transient 5xx would silently double-rotate. The handler
-        // must NOT retry on paths whose last segment is a side-effecting verb.
+        // DkimSecurity.RotateAsync hits POST /v1/dkim_management/domains/{name}/rotate per Mailgun's
+        // docs — POST isn't classified as idempotent, so it's never retried regardless of the
+        // action-endpoint check. This test pins that "rotate is POST, fires once" contract.
         var (client, counter) = Build(3,
-            HttpStatusCode.InternalServerError, // first call returns 500
+            HttpStatusCode.InternalServerError,
             HttpStatusCode.OK);
 
         await Assert.ThrowsAsync<MailgunApiException>(() => client.DkimSecurity.RotateAsync("mg.example.com"));
 
-        // Exactly one call — no retry — even though PUT would normally be retried on 5xx.
         Assert.Equal(1, counter.CallCount);
+    }
+
+    [Fact]
+    public async Task IsActionEndpoint_skips_retry_for_PUT_to_last_segment_rotate_paths()
+    {
+        // Defensive: even if a future Mailgun endpoint uses PUT/DELETE for a non-idempotent
+        // action, the handler's IsActionEndpoint heuristic must kick in. Drive the handler
+        // directly with a synthetic PUT to a /rotate-something last segment.
+        var counter = new CountingHandler(HttpStatusCode.InternalServerError, HttpStatusCode.OK);
+        var rateLimit = (DelegatingHandler)Activator.CreateInstance(
+            typeof(MailgunClient).Assembly.GetType("Mailgun.Http.RateLimitHandler")!,
+            args: new object[] { 3 })!;
+        rateLimit.InnerHandler = counter;
+        using var http = new HttpClient(rateLimit);
+        using var req = new HttpRequestMessage(HttpMethod.Put,
+            new Uri("https://api.mailgun.test/v1/dkim_management/domains/refresh-club.com/rotate-something"));
+
+        using var resp = await http.SendAsync(req);
+
+        // One call only — even though PUT is "idempotent" by spec, the /rotate-something last
+        // segment classifies this as an action endpoint and disables retry. Also exercises the
+        // false-positive fix for #4: the middle segment "refresh-club.com" containing the verb
+        // "refresh" does NOT trigger the heuristic (because middle segments are ignored AND
+        // the domain has a dot).
+        Assert.Equal(1, counter.CallCount);
+    }
+
+    [Fact]
+    public async Task IsActionEndpoint_does_not_disable_retry_for_domain_named_refresh()
+    {
+        // Regression for #4: substring-matching on /refresh, /rotate, /regenerate previously caught
+        // any domain literally containing those tokens (e.g. refresh-club.com), silently disabling
+        // 5xx retry on every PUT/DELETE to that domain. The dot-aware last-segment heuristic must
+        // restore retry for these.
+        var counter = new CountingHandler(
+            HttpStatusCode.InternalServerError,
+            HttpStatusCode.InternalServerError,
+            HttpStatusCode.OK);
+        var rateLimit = (DelegatingHandler)Activator.CreateInstance(
+            typeof(MailgunClient).Assembly.GetType("Mailgun.Http.RateLimitHandler")!,
+            args: new object[] { 3 })!;
+        rateLimit.InnerHandler = counter;
+        using var http = new HttpClient(rateLimit);
+        // PUT /v4/domains/{refresh-club.com}/tracking/open — the verb-shaped token is in a middle
+        // segment AND the segment has a dot, so it must NOT trip the action-endpoint check.
+        using var req = new HttpRequestMessage(HttpMethod.Put,
+            new Uri("https://api.mailgun.test/v4/domains/refresh-club.com/tracking/open"));
+
+        using var resp = await http.SendAsync(req);
+
+        // Initial attempt + 2 retries (the two 5xx) = 3 total. Retry must NOT be suppressed.
+        Assert.Equal(3, counter.CallCount);
     }
 
     [Fact]

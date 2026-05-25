@@ -139,11 +139,14 @@ internal sealed class MessagesService : IMessagesService
         if (r.Template is not null) mp.AddText("template", r.Template);
         if (r.TemplateVersion is not null) mp.AddText("t:version", r.TemplateVersion);
         if (r.TemplateText is not null) mp.AddText("t:text", r.TemplateText);
-        mp.AddPrefixed("v:", r.TemplateVariables);
+        // TemplateVariables and CustomVariables both serialize as v:* form fields per Mailgun's wire
+        // format — they're conceptually the same field, with TemplateVariables driving template
+        // substitution and CustomVariables surfacing in event payloads. Merge here so a key set in
+        // both dictionaries gets emitted exactly once (TemplateVariables wins on collision).
+        mp.AddPrefixed("v:", MergeVariables(r.TemplateVariables, r.CustomVariables));
         if (r.RecipientVariables is not null) mp.AddText("recipient-variables", r.RecipientVariables);
 
         mp.AddPrefixed("h:", r.CustomHeaders);
-        mp.AddPrefixed("v:", r.CustomVariables);
 
         foreach (var att in r.Attachments)
             mp.AddFile("attachment", att.FileName, att.Content, att.ContentType);
@@ -178,13 +181,33 @@ internal sealed class MessagesService : IMessagesService
         if (r.Template is not null) fb.Add("template", r.Template);
         if (r.TemplateVersion is not null) fb.Add("t:version", r.TemplateVersion);
         if (r.TemplateText is not null) fb.Add("t:text", r.TemplateText);
-        fb.AddPrefixed("v:", r.TemplateVariables);
+        // See BuildMultipart for the rationale: TemplateVariables + CustomVariables share Mailgun's
+        // v:* form-field namespace; we merge here to emit each key once (TemplateVariables wins).
+        fb.AddPrefixed("v:", MergeVariables(r.TemplateVariables, r.CustomVariables));
         if (r.RecipientVariables is not null) fb.Add("recipient-variables", r.RecipientVariables);
     }
 
     private static void ApplyHeaders(FormBuilder fb, SendMessageRequest r)
     {
         fb.AddPrefixed("h:", r.CustomHeaders);
-        fb.AddPrefixed("v:", r.CustomVariables);
+    }
+
+    /// <summary>
+    /// Merges <paramref name="primary"/> and <paramref name="secondary"/> into a single dictionary,
+    /// with <paramref name="primary"/> winning on key collision. Returns null when both inputs
+    /// are empty so callers can short-circuit.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? MergeVariables(
+        IReadOnlyDictionary<string, string> primary,
+        IReadOnlyDictionary<string, string> secondary)
+    {
+        if (primary.Count == 0 && secondary.Count == 0)
+            return null;
+        if (primary.Count == 0) return secondary;
+        if (secondary.Count == 0) return primary;
+        var merged = new Dictionary<string, string>(secondary);
+        foreach (var kv in primary)
+            merged[kv.Key] = kv.Value;
+        return merged;
     }
 }

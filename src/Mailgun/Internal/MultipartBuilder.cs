@@ -93,21 +93,21 @@ internal sealed class MultipartBuilder : IDisposable
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        // Buffer the stream so retries don't see an exhausted reader. For very small streams
-        // this is essentially free; for bigger uploads (Mailgun caps bulk-validation CSV at
-        // 25 MB) it costs a transient byte[] allocation, which is the right trade-off for a
-        // robust retry path.
-        byte[] buffer;
-        if (stream is MemoryStream ms && ms.TryGetBuffer(out var seg) && seg.Offset == 0)
-        {
-            buffer = seg.Count == seg.Array!.Length ? seg.Array : ms.ToArray();
-        }
-        else
-        {
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            buffer = copy.ToArray();
-        }
+        // Buffer the stream into a fresh byte[] so retries don't see an exhausted reader.
+        //
+        // The previous fast path for publicly-visible MemoryStream had two correctness bugs:
+        //  (1) Stream.Position was ignored — TryGetBuffer returns the array bounds, not the unread
+        //      region, so pre-position bytes (e.g. a header line the caller already consumed)
+        //      leaked into the upload.
+        //  (2) When the segment covered the whole array, the SDK aliased the caller's raw array
+        //      directly into ByteArrayContent — later mutations to the caller's buffer would
+        //      mutate the HTTP body in flight.
+        // CopyTo always reads from the current Position and produces an independent copy, so both
+        // bugs go away by removing the fast path entirely. The allocation cost is bounded by
+        // Mailgun's own request-size limits (25 MB for bulk CSVs).
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        var buffer = copy.ToArray();
         // Take ownership of the caller's stream so callers can use a single `using` for the
         // builder (matches the byte[] overload's lifetime expectations).
         _disposables.Add(stream);
