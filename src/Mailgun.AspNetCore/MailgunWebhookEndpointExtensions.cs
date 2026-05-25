@@ -33,22 +33,26 @@ public static class MailgunWebhookEndpointExtensions
         return endpoints.MapPost(pattern, async (HttpContext context) =>
         {
             var ct = context.RequestAborted;
-            var bytes = await ReadBodyAsync(context, ct).ConfigureAwait(false);
-            MailgunWebhookEvent evt;
-            try
+
+            // Reject obviously oversized bodies before reading anything off the wire.
+            if (context.Request.ContentLength is long declared && declared > options.MaxRequestBytes)
             {
-                evt = MailgunWebhookParser.Parse(bytes);
-            }
-            catch (Exception)
-            {
-                return Results.BadRequest();
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
             }
 
-            if (evt.Signature is null)
+            var (bytes, exceededCap) = await ReadBodyAsync(context, options.MaxRequestBytes, ct).ConfigureAwait(false);
+            if (exceededCap)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+
+            // Verify the signature BEFORE typed deserialization. A cheap JsonDocument peek for the
+            // signature object lets us reject unauthenticated/forged requests without paying the cost
+            // of typed event-data parsing on attacker-controlled input.
+            if (!MailgunWebhookParser.TryExtractSignature(bytes, out var sig))
             {
                 return Results.Unauthorized();
             }
-            var sig = evt.Signature;
 
             var valid = MailgunWebhookSignatureValidator.IsValid(
                 options.SigningKey, sig.Timestamp, sig.Token, sig.Signature,
@@ -63,15 +67,36 @@ public static class MailgunWebhookEndpointExtensions
                 return Results.Conflict();
             }
 
+            MailgunWebhookEvent evt;
+            try
+            {
+                evt = MailgunWebhookParser.Parse(bytes);
+            }
+            catch (Exception)
+            {
+                return Results.BadRequest();
+            }
+
             await handler(evt, context, ct).ConfigureAwait(false);
             return Results.Ok();
         });
     }
 
-    private static async Task<byte[]> ReadBodyAsync(HttpContext context, CancellationToken ct)
+    private static async Task<(ReadOnlyMemory<byte> Bytes, bool ExceededCap)> ReadBodyAsync(
+        HttpContext context, int maxBytes, CancellationToken ct)
     {
-        using var ms = new MemoryStream();
-        await context.Request.Body.CopyToAsync(ms, ct).ConfigureAwait(false);
-        return ms.ToArray();
+        // Read up to maxBytes+1 so we can detect a body that's exactly at the cap vs. exceeds it.
+        var ms = new MemoryStream();
+        var buffer = new byte[8192];
+        int read;
+        while ((read = await context.Request.Body.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
+        {
+            if (ms.Length + read > maxBytes)
+            {
+                return (default, true);
+            }
+            await ms.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+        }
+        return (ms.ToArray().AsMemory(), false);
     }
 }

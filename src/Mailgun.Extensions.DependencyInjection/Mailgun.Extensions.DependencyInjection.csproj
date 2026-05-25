@@ -14,7 +14,7 @@
     <Copyright>Copyright (c) 2026 Andreas Lohr. All rights reserved.</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>mailgun;sdk;email;di;dependencyinjection</PackageTags>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/AndreasLohr/mailgun-dotnet</RepositoryUrl>
   </PropertyGroup>

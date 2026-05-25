@@ -44,12 +44,14 @@ public class ConverterTests
     }
 
     [Fact]
-    public void Rfc2822_writes_rfc1123_string_in_utc()
+    public void Rfc2822_writes_rfc2822_numeric_offset_string_in_utc()
     {
+        // Strict RFC-2822 numeric offset, UTC-normalized. Mailgun's /v1/analytics/logs rejects the
+        // RFC-1123 "GMT" textual zone, so the converter emits "-0000" instead.
         var holder = new Rfc2822Holder { At = new DateTimeOffset(2026, 5, 16, 14, 30, 0, TimeSpan.FromHours(2)) };
         var json = JsonSerializer.Serialize(holder);
-        // RFC-1123 from "r" specifier: "Sat, 16 May 2026 12:30:00 GMT" (UTC, not source offset).
-        Assert.Contains("16 May 2026 12:30:00 GMT", json, StringComparison.Ordinal);
+        Assert.Contains("16 May 2026 12:30:00 -0000", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("GMT", json, StringComparison.Ordinal);
         Assert.DoesNotContain("14:30", json, StringComparison.Ordinal);
     }
 
@@ -69,6 +71,23 @@ public class ConverterTests
     {
         var json = "{\"At\":\"not-a-date\"}";
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Rfc2822Holder>(json));
+    }
+
+    [Fact]
+    public void Rfc2822_throws_JsonException_not_AOORE_on_numeric_overflow()
+    {
+        // Regression: (long)(huge_double * 1000.0) wraps to long.MinValue, which then makes
+        // DateTimeOffset.FromUnixTimeMilliseconds throw ArgumentOutOfRangeException. The
+        // converter must catch and rethrow as JsonException to match its documented contract.
+        var json = "{\"At\":1e308}";
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Rfc2822Holder>(json));
+    }
+
+    [Fact]
+    public void Unix_throws_JsonException_not_AOORE_on_numeric_overflow()
+    {
+        var json = "{\"At\":1e308}";
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<UnixHolder>(json));
     }
 
     [Fact]

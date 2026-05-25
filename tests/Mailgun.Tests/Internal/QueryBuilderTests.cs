@@ -24,13 +24,16 @@ public class QueryBuilderTests
     }
 
     [Fact]
-    public void DateTimeOffset_serializes_as_rfc1123_utc()
+    public void DateTimeOffset_serializes_as_rfc2822_numeric_offset_utc()
     {
+        // Mailgun's strict endpoints (e.g. /v1/analytics/logs) reject "GMT" and require numeric
+        // offset like -0000, so the SDK formats DateTimeOffset via MailgunDate.FormatRfc2822.
         var qb = new QueryBuilder();
         var dt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.FromHours(5));
         qb.Add("t", (DateTimeOffset?)dt);
         var t = qb.Build().Single(p => p.Key == "t").Value!;
-        Assert.EndsWith("GMT", t, StringComparison.Ordinal);
+        Assert.EndsWith("-0000", t, StringComparison.Ordinal);
+        Assert.DoesNotContain("GMT", t, StringComparison.Ordinal);
         Assert.Contains("01 Jan 2026", t, StringComparison.Ordinal);
         Assert.Contains("22:04:05", t, StringComparison.Ordinal); // converted to UTC
     }

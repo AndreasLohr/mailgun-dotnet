@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Mailgun.Internal;
 
 namespace Mailgun.Serialization;
 
@@ -28,7 +29,16 @@ public sealed class Rfc2822DateTimeOffsetConverter : JsonConverter<DateTimeOffse
         }
         else if (reader.TokenType == JsonTokenType.Number && reader.TryGetDouble(out var seconds))
         {
-            return DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000.0));
+            // FromUnixTimeMilliseconds throws ArgumentOutOfRangeException outside year 0001..9999;
+            // wrap so callers see the documented JsonException instead.
+            try
+            {
+                return DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000.0));
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                throw new JsonException("Mailgun date numeric value is outside the supported DateTimeOffset range.", ex);
+            }
         }
         throw new JsonException("Could not parse Mailgun date value.");
     }
@@ -36,7 +46,9 @@ public sealed class Rfc2822DateTimeOffsetConverter : JsonConverter<DateTimeOffse
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
     {
-        // Mailgun's preferred wire format: RFC 1123 GMT, which is a valid subset of RFC 2822.
-        writer.WriteStringValue(value.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture));
+        // Strict RFC-2822 numeric-offset form. See MailgunDate.FormatRfc2822 for the rationale —
+        // .NET's "r" format emits "GMT" which Mailgun's stricter endpoints (e.g. /v1/analytics/logs)
+        // reject as an invalid format.
+        writer.WriteStringValue(MailgunDate.FormatRfc2822(value));
     }
 }

@@ -11,10 +11,25 @@ namespace Mailgun.Webhooks;
 /// </summary>
 public static class MailgunWebhookParser
 {
-    /// <summary>Parse from a UTF-8 byte buffer. Prefer this overload to avoid an extra string allocation.</summary>
+    /// <summary>
+    /// Parse from a UTF-8 byte buffer. <see cref="JsonDocument.Parse(ReadOnlyMemory{byte}, JsonDocumentOptions)"/>
+    /// cannot take a span (a span can't be heap-stored), so this overload allocates a one-shot copy
+    /// before parsing. Prefer the <see cref="Parse(ReadOnlyMemory{byte})"/> overload when you already
+    /// hold the bytes in a heap-backed buffer — it parses in place with no copy.
+    /// </summary>
     public static MailgunWebhookEvent Parse(ReadOnlySpan<byte> utf8Json)
     {
         using var doc = JsonDocument.Parse(utf8Json.ToArray());
+        return ParseDocument(doc);
+    }
+
+    /// <summary>
+    /// Parse from a heap-backed UTF-8 buffer without copying. Pass a <see cref="ReadOnlyMemory{T}"/>
+    /// over the body bytes (e.g. <c>buffer.AsMemory()</c>) and <see cref="JsonDocument"/> parses in place.
+    /// </summary>
+    public static MailgunWebhookEvent Parse(ReadOnlyMemory<byte> utf8Json)
+    {
+        using var doc = JsonDocument.Parse(utf8Json);
         return ParseDocument(doc);
     }
 
@@ -32,6 +47,38 @@ public static class MailgunWebhookParser
         ArgumentNullException.ThrowIfNull(stream);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         return ParseDocument(doc);
+    }
+
+    /// <summary>
+    /// Pulls only the <c>signature</c> object out of a Mailgun webhook payload so callers can verify
+    /// the HMAC before paying for full typed deserialization of <c>event-data</c>. Returns
+    /// <c>false</c> for malformed JSON or a missing/incomplete signature block.
+    /// </summary>
+    public static bool TryExtractSignature(ReadOnlyMemory<byte> utf8Json, out WebhookSignature signature)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(utf8Json);
+            if (doc.RootElement.TryGetProperty("signature", out var sig)
+                && sig.TryGetProperty("timestamp", out var t)
+                && sig.TryGetProperty("token", out var tk)
+                && sig.TryGetProperty("signature", out var s))
+            {
+                signature = new WebhookSignature
+                {
+                    Timestamp = t.GetString() ?? string.Empty,
+                    Token = tk.GetString() ?? string.Empty,
+                    Signature = s.GetString() ?? string.Empty,
+                };
+                return true;
+            }
+        }
+        catch (JsonException)
+        {
+            // fall through to false
+        }
+        signature = new WebhookSignature();
+        return false;
     }
 
     private static MailgunWebhookEvent ParseDocument(JsonDocument doc)

@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Text.Json.Serialization;
+using Mailgun.Internal;
 
 namespace Mailgun.Models.Analytics;
 
@@ -15,8 +15,7 @@ public static class AnalyticsTime
     /// numeric offset). Use this when assigning <see cref="LogsRequest.Start"/> / <see cref="LogsRequest.End"/> —
     /// the metrics + usage endpoints also accept this format, so it's the safe default everywhere.
     /// </summary>
-    public static string Format(DateTimeOffset value) =>
-        value.ToUniversalTime().ToString("ddd, dd MMM yyyy HH:mm:ss -0000", CultureInfo.InvariantCulture);
+    public static string Format(DateTimeOffset value) => MailgunDate.FormatRfc2822(value);
 }
 
 /// <summary>Parameters for <c>POST /v1/analytics/metrics</c>.</summary>

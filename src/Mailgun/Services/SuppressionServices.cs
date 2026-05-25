@@ -172,12 +172,12 @@ internal sealed class UnsubscribesService : IUnsubscribesService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
-        var q = new QueryBuilder().Add("tag", tag).Build();
-        var path = $"v3/{PathEscape.Segment(domain)}/unsubscribes/{PathEscape.Segment(address)}";
-        // Re-build with query string by stuffing into path (Mailgun accepts ?tag= on DELETE for unsubscribes).
-        if (!string.IsNullOrEmpty(tag))
-            path += "?tag=" + Uri.EscapeDataString(tag);
-        return _http.DeleteNoResponseAsync(path, cancellationToken);
+        // Mailgun accepts ?tag= on DELETE for unsubscribes; we route the optional filter through the
+        // standard query channel rather than splicing it into the path so BuildUri owns the encoding.
+        var query = new QueryBuilder().Add("tag", tag).Build();
+        return _http.DeleteNoResponseAsync(
+            $"v3/{PathEscape.Segment(domain)}/unsubscribes/{PathEscape.Segment(address)}",
+            query, cancellationToken);
     }
 
     public Task DeleteAllAsync(string domain, CancellationToken cancellationToken = default)

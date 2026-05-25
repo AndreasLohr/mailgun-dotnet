@@ -36,14 +36,17 @@ public class FormBuilderTests
     }
 
     [Fact]
-    public void DateTimeOffset_emits_rfc1123_utc()
+    public void DateTimeOffset_emits_rfc2822_numeric_offset_utc()
     {
+        // Mailgun's stricter endpoints reject "GMT" textual zone; the SDK formats via MailgunDate
+        // (RFC-2822 with numeric -0000 offset, UTC-normalized).
         var fb = new FormBuilder();
         var dt = new DateTimeOffset(2026, 5, 16, 12, 34, 56, TimeSpan.FromHours(2));
         fb.Add("t", (DateTimeOffset?)dt);
         var pairs = fb.Build();
-        Assert.Contains(pairs, p => p.Key == "t" && p.Value.EndsWith("GMT", StringComparison.Ordinal));
-        Assert.Contains(pairs, p => p.Key == "t" && p.Value.Contains("16 May 2026 10:34:56", StringComparison.Ordinal));
+        Assert.Contains(pairs, p => p.Key == "t" && p.Value!.EndsWith("-0000", StringComparison.Ordinal));
+        Assert.DoesNotContain(pairs, p => p.Key == "t" && p.Value!.Contains("GMT", StringComparison.Ordinal));
+        Assert.Contains(pairs, p => p.Key == "t" && p.Value!.Contains("16 May 2026 10:34:56", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -40,7 +40,7 @@ internal sealed class MultipartBuilder : IDisposable
         AddText(name, value is null ? null : (value.Value ? "yes" : "no"));
 
     public MultipartBuilder AddText(string name, DateTimeOffset? value) =>
-        AddText(name, value?.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture));
+        AddText(name, value is null ? null : MailgunDate.FormatRfc2822(value.Value));
 
     public MultipartBuilder AddTextArray(string name, IEnumerable<string>? values)
     {

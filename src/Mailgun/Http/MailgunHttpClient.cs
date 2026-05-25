@@ -78,11 +78,16 @@ internal sealed class MailgunHttpClient : IDisposable
     }
 
     /// <summary>
-    /// Most recent response metadata captured by this client. <strong>Not safe for concurrent use:</strong>
-    /// when multiple callers issue requests against the same <see cref="MailgunClient"/> in parallel
-    /// (e.g. in an ASP.NET Core app with the DI-registered singleton), they race to overwrite this
-    /// property. Use <see cref="MailgunClientOptions.OnResponse"/> to capture per-request metadata
-    /// safely in concurrent scenarios.
+    /// Most recent response metadata captured by this client. <strong>Not safe for concurrent use
+    /// and effectively unusable in DI scenarios:</strong> when multiple callers issue requests against
+    /// the same <see cref="MailgunClient"/> in parallel (which is the default with the DI-registered
+    /// singleton in ASP.NET Core), they race to overwrite this single field — by the time you read
+    /// it, another request may have already replaced its contents.
+    /// <para>
+    /// Prefer <see cref="MailgunClientOptions.OnResponse"/> for capturing per-request metadata: it
+    /// fires synchronously on the caller's async flow and lets each request route the metadata into
+    /// its own per-request storage (an <see cref="System.Threading.AsyncLocal{T}"/>, a logging scope, etc.).
+    /// </para>
     /// </summary>
     public MailgunResponseMetadata? LastResponseMetadata { get; private set; }
 
@@ -130,6 +135,10 @@ internal sealed class MailgunHttpClient : IDisposable
 
     public Task DeleteNoResponseAsync(string path, CancellationToken ct) =>
         SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: null, ct);
+
+    /// <summary>DELETE with query-string parameters and no response body.</summary>
+    public Task DeleteNoResponseAsync(string path, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken ct) =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query, content: null, ct);
 
     /// <summary>
     /// DELETE with a JSON request body — Mailgun uses this shape for endpoints like
@@ -267,11 +276,22 @@ internal sealed class MailgunHttpClient : IDisposable
             // Invoke the per-response callback exactly once per request, regardless of success
             // status. Concurrent-safe (the SDK doesn't store metadata via this callback — it's the
             // caller's responsibility to route it into their own storage). Wrapped so a thrown
-            // callback can't break the request.
+            // callback can't break the request, but the exception is surfaced to Trace + the active
+            // Activity so a misbehaving callback (e.g. one whose logger throws) is diagnosable.
             if (_onResponse is { } onResponse)
             {
                 try { onResponse(metadata); }
-                catch { /* user callback exceptions don't propagate into the request flow */ }
+                catch (Exception cbEx)
+                {
+                    System.Diagnostics.Trace.TraceWarning(
+                        "Mailgun OnResponse callback threw {0}: {1}", cbEx.GetType().FullName, cbEx.Message);
+                    activity?.AddEvent(new System.Diagnostics.ActivityEvent("mailgun.on_response.exception",
+                        tags: new System.Diagnostics.ActivityTagsCollection
+                        {
+                            ["exception.type"] = cbEx.GetType().FullName,
+                            ["exception.message"] = cbEx.Message,
+                        }));
+                }
             }
 
             var raw = response.Content is null

@@ -52,6 +52,29 @@ public class MailgunWebhookSignatureValidatorTests
         Assert.True(MailgunWebhookSignatureValidator.IsValid(SigningKey, ts, token, sig, TimeSpan.FromMinutes(15)));
     }
 
+    [Fact]
+    public void Empty_signing_key_throws_instead_of_silently_validating()
+    {
+        // Regression: HMACSHA256 accepts a zero-length key. Previously the validator's
+        // ArgumentNullException.ThrowIfNull check let "" through, which would have computed a
+        // deterministic HMAC anyone could forge from the public timestamp+token. The validator
+        // must reject the empty signing key explicitly.
+        Assert.Throws<ArgumentException>(() =>
+            MailgunWebhookSignatureValidator.IsValid("", "1", "tok", "sig"));
+    }
+
+    [Fact]
+    public void Out_of_range_timestamp_returns_false_does_not_throw()
+    {
+        // Regression: DateTimeOffset.FromUnixTimeSeconds throws ArgumentOutOfRangeException for
+        // values outside year 0001..9999. A crafted payload with a long-parseable but out-of-range
+        // timestamp used to propagate the exception to a 500. Must return false instead.
+        var (_, token, sig) = ComputeSignature(SigningKey, secondsAgo: 0);
+        var futureGarbage = "99999999999999"; // ~year 5168700, outside DateTimeOffset's range
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(
+            SigningKey, futureGarbage, token, sig, TimeSpan.FromMinutes(15)));
+    }
+
     private static (string Timestamp, string Token, string Signature) ComputeSignature(string key, int secondsAgo)
     {
         var ts = DateTimeOffset.UtcNow.AddSeconds(-secondsAgo).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);

@@ -21,10 +21,13 @@ public static class MailgunServiceCollectionExtensions
 
     /// <summary>
     /// Registers <see cref="IMailgunClient"/> with options bound from the supplied <see cref="IConfigurationSection"/>.
-    /// Uses <see cref="OptionsConfigurationServiceCollectionExtensions.Configure{TOptions}(IServiceCollection, IConfiguration)"/>,
-    /// so reload-on-change is honored when the configuration provider supports it (e.g. <c>appsettings.json</c>
-    /// with <c>reloadOnChange: true</c>).
     /// </summary>
+    /// <remarks>
+    /// The resolved <see cref="IMailgunClient"/> is a singleton and reads its options snapshot once at
+    /// construction. Mutations to the underlying configuration source after the first resolve (e.g.
+    /// rotating the API key in <c>appsettings.json</c>) do NOT propagate to the running client — restart
+    /// the process or rebuild the service provider for rotation to take effect.
+    /// </remarks>
     public static IHttpClientBuilder AddMailgun(
         this IServiceCollection services,
         IConfigurationSection section)
@@ -83,8 +86,11 @@ public static class MailgunServiceCollectionExtensions
 
         var builder = services.AddHttpClient(HttpClientName, (sp, http) =>
             {
+                // BaseAddress is intentionally not set: MailgunHttpClient.BuildUri composes absolute
+                // URIs from its own resolved base URL. Setting HttpClient.BaseAddress here would be
+                // dead config, and worse, would diverge from the SDK's source of truth if a caller
+                // ever updated one but not the other.
                 var opts = sp.GetRequiredService<IOptions<MailgunClientOptions>>().Value;
-                http.BaseAddress = new Uri(opts.ResolveBaseUrl().TrimEnd('/') + "/");
                 http.Timeout = opts.Timeout;
             })
             .AddHttpMessageHandler<RateLimitHandler>();

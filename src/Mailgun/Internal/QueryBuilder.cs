@@ -23,7 +23,7 @@ internal sealed class QueryBuilder
         Add(name, value is null ? null : (value.Value ? "yes" : "no"));
 
     public QueryBuilder Add(string name, DateTimeOffset? value) =>
-        Add(name, value?.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture));
+        Add(name, value is null ? null : MailgunDate.FormatRfc2822(value.Value));
 
     public QueryBuilder AddArray(string name, IEnumerable<string>? values)
     {

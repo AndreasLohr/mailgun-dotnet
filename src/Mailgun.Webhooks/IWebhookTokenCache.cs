@@ -19,6 +19,13 @@ public interface IWebhookTokenCache
 /// In-memory <see cref="IWebhookTokenCache"/> suitable for single-process deployments.
 /// Distributed deployments should plug in a Redis-backed implementation.
 /// </summary>
+/// <remarks>
+/// Each <see cref="MarkSeen"/> call sweeps expired entries synchronously (O(n) in the current
+/// cache size, on the request path). This is intentional — Mailgun's webhook volume is small
+/// (typically a few per second per domain) and the per-request overhead is dominated by the
+/// HMAC verification itself. If you expect sustained high throughput, swap to a TTL-aware
+/// distributed cache (Redis EXPIRE, MemoryCache with absolute expiry) and skip the per-call sweep.
+/// </remarks>
 public sealed class InMemoryWebhookTokenCache : IWebhookTokenCache
 {
     private readonly ConcurrentDictionary<string, DateTimeOffset> _seen = new();

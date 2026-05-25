@@ -31,7 +31,7 @@ internal sealed class FormBuilder
         Add(name, value is null ? null : (value.Value ? "yes" : "no"));
 
     public FormBuilder Add(string name, DateTimeOffset? value) =>
-        Add(name, value?.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture));
+        Add(name, value is null ? null : MailgunDate.FormatRfc2822(value.Value));
 
     public FormBuilder AddArray(string name, IEnumerable<string>? values)
     {

@@ -20,7 +20,10 @@ public static class MailgunWebhookSignatureValidator
     /// </summary>
     public static bool IsValid(string signingKey, string timestamp, string token, string signature)
     {
-        ArgumentNullException.ThrowIfNull(signingKey);
+        // ThrowIfNullOrEmpty (not ThrowIfNull) — HMACSHA256 accepts a zero-length key and produces a
+        // deterministic output that anyone can compute from public inputs, so an empty signing key
+        // would let an attacker forge valid signatures. Fail loud at the API boundary instead.
+        ArgumentException.ThrowIfNullOrEmpty(signingKey);
         ArgumentNullException.ThrowIfNull(timestamp);
         ArgumentNullException.ThrowIfNull(token);
         ArgumentNullException.ThrowIfNull(signature);
@@ -56,11 +59,20 @@ public static class MailgunWebhookSignatureValidator
             return false;
         if (!long.TryParse(timestamp, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixSeconds))
             return false;
+        // DateTimeOffset.FromUnixTimeSeconds throws ArgumentOutOfRangeException outside its supported
+        // range (-62135596800..253402300799). A long-parsable but out-of-range value from a crafted
+        // payload would otherwise propagate to a 500 instead of a clean 401. Range-check first.
+        if (unixSeconds < UnixSecondsMin || unixSeconds > UnixSecondsMax)
+            return false;
         var ts = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
         var current = now ?? DateTimeOffset.UtcNow;
         var age = current - ts;
         return age.Duration() <= maxAge;
     }
+
+    // From DateTimeOffset.FromUnixTimeSeconds documentation: valid range is [year 0001, year 9999].
+    private const long UnixSecondsMin = -62135596800L;
+    private const long UnixSecondsMax = 253402300799L;
 
     private static string HexLower(byte[] data)
     {

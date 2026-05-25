@@ -77,9 +77,11 @@ internal sealed class RateLimitHandler : DelegatingHandler
             }
         }
 
-        // Fallback: exponential 2^attempt seconds.
+        // Fallback: exponential 2^attempt seconds with ±20 % jitter so a fleet of clients sharing the
+        // same outage don't all retry on the exact same second (thundering-herd avoidance).
         var seconds = Math.Min(MaxBackoff.TotalSeconds, Math.Pow(2, attempt));
-        return TimeSpan.FromSeconds(seconds);
+        var jitterFactor = 1.0 + ((Random.Shared.NextDouble() * 0.4) - 0.2);
+        return TimeSpan.FromSeconds(Math.Max(0.0, seconds * jitterFactor));
     }
 
     private static TimeSpan Clamp(TimeSpan t) => t > MaxBackoff ? MaxBackoff : t;
