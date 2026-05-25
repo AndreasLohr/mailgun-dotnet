@@ -91,6 +91,34 @@ public class SerializationDriftTests
     }
 
     [Fact]
+    public async Task Domain_disabled_field_as_bare_boolean_does_not_crash_deserialization()
+    {
+        // Regression: Mailgun's legacy / active-domain wire format sometimes emits "disabled" as a
+        // bare boolean (false) instead of the structured DomainDisabledInfo object. The polymorphic
+        // converter must accept both shapes; the bare boolean normalizes to null (use IsDisabled
+        // for the boolean state).
+        const string fixture = """
+            {
+              "domain": {
+                "id": "abc",
+                "name": "mg.example.com",
+                "state": "active",
+                "is_disabled": false,
+                "disabled": false
+              }
+            }
+            """;
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, fixture);
+
+        var resp = await client.Domains.GetAsync("mg.example.com");
+
+        Assert.Equal("mg.example.com", resp.Domain.Name);
+        Assert.False(resp.Domain.IsDisabled);
+        Assert.Null(resp.Domain.Disabled); // bare boolean normalized to null
+    }
+
+    [Fact]
     public async Task Suppressions_bounces_page_deserializes_with_skip_limit_paging()
     {
         const string fixture = """

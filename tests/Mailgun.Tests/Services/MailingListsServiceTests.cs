@@ -165,6 +165,39 @@ public class MailingListsServiceTests
     }
 
     [Fact]
+    public async Task BulkAddMembers_embeds_Vars_as_nested_JSON_object_not_string()
+    {
+        // Regression: Mailgun's /members.json wants each member's `vars` to be a NESTED OBJECT,
+        // not a JSON-encoded string. Previously the SDK serialized AddMemberRequest.Vars (string)
+        // as-is, producing "vars":"{\"plan\":\"pro\"}" which Mailgun ignored.
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.MailingLists.BulkAddMembersAsync("l@y", new[]
+        {
+            new AddMemberRequest { Address = "a@b", Name = "A", Vars = "{\"plan\":\"pro\",\"count\":3}" },
+        });
+
+        var req = Assert.Single(handler.Requests);
+        // The members= form field's URL-decoded JSON should contain `"vars":{...}`, not `"vars":"{...}"`.
+        var body = System.Net.WebUtility.UrlDecode(req.Body!);
+        Assert.Contains("\"vars\":{\"plan\":\"pro\",\"count\":3}", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"vars\":\"{", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BulkAddMembers_invalid_Vars_JSON_throws_clear_ArgumentException()
+    {
+        var (client, _) = TestMailgunClient.Create();
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.MailingLists.BulkAddMembersAsync("l@y", new[]
+            {
+                new AddMemberRequest { Address = "bad@y", Vars = "not-json" },
+            }));
+        Assert.Contains("bad@y", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task BulkAddMembers_rejects_empty_and_over_1000()
     {
         var (client, _) = TestMailgunClient.Create();

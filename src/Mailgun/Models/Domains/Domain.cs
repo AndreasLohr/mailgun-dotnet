@@ -13,7 +13,16 @@ public sealed class Domain
     [JsonPropertyName("type")] public string? Type { get; init; }
     [JsonPropertyName("state")] public string? State { get; init; }
     [JsonPropertyName("is_disabled")] public bool? IsDisabled { get; init; }
-    [JsonPropertyName("disabled")] public DomainDisabledInfo? Disabled { get; init; }
+
+    /// <summary>
+    /// Disabled-state envelope when present. Mailgun's wire format here is polymorphic — see
+    /// <see cref="PolymorphicDomainDisabledConverter"/>. Active domains return a bare boolean,
+    /// disabled ones return the structured object; we normalize the boolean form to <c>null</c>
+    /// (use <see cref="IsDisabled"/> for the boolean state).
+    /// </summary>
+    [JsonPropertyName("disabled")]
+    [JsonConverter(typeof(PolymorphicDomainDisabledConverter))]
+    public DomainDisabledInfo? Disabled { get; init; }
     [JsonPropertyName("require_tls")] public bool? RequireTls { get; init; }
     [JsonPropertyName("skip_verification")] public bool? SkipVerification { get; init; }
     [JsonPropertyName("spam_action")] public string? SpamAction { get; init; }

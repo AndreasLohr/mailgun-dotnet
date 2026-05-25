@@ -65,24 +65,28 @@ public class ExtendedServicesTests
     }
 
     [Fact]
-    public async Task IpPools_Delegate_posts_subaccounts_array()
+    public async Task IpPools_Delegate_puts_multipart_with_singular_subaccount_id()
     {
+        // Mailgun documents PUT /v3/ip_pools/{id}/delegate with multipart `subaccount_id` (singular).
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
 
-        await client.IpPools.DelegateAsync("p1", new[] { "acct_a", "acct_b" });
+        await client.IpPools.DelegateAsync("p1", "acct_a");
 
         var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Put, req.Method);
         Assert.EndsWith("/v3/ip_pools/p1/delegate", req.Uri.AbsolutePath);
-        Assert.Contains("\"subaccounts\":[\"acct_a\",\"acct_b\"]", req.Body!, StringComparison.Ordinal);
+        Assert.Equal("multipart/form-data", req.ContentType);
+        Assert.Contains("subaccount_id", req.Body!, StringComparison.Ordinal);
+        Assert.Contains("acct_a", req.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task IpPools_Delegate_rejects_empty_subaccount_list()
+    public async Task IpPools_Delegate_rejects_empty_subaccount_id()
     {
         var (client, _) = TestMailgunClient.Create();
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            client.IpPools.DelegateAsync("p1", Array.Empty<string>()));
+            client.IpPools.DelegateAsync("p1", ""));
     }
 
     [Fact]
@@ -97,7 +101,12 @@ public class ExtendedServicesTests
 
         Assert.EndsWith("/v3/ip_pools/p1/delegations", handler.Requests[0].Uri.AbsolutePath);
         Assert.Equal(HttpMethod.Delete, handler.Requests[1].Method);
-        Assert.EndsWith("/v3/ip_pools/p1/delegate/acct_a", handler.Requests[1].Uri.AbsolutePath);
+        // Revoke uses DELETE /v3/ip_pools/{poolId}/delegate with multipart subaccount_id in the body,
+        // NOT a path-segment subaccount id (the old shape Mailgun never supported here).
+        Assert.EndsWith("/v3/ip_pools/p1/delegate", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Equal("multipart/form-data", handler.Requests[1].ContentType);
+        Assert.Contains("subaccount_id", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.Contains("acct_a", handler.Requests[1].Body!, StringComparison.Ordinal);
     }
 
     // ── InboxPlacement extensions ──

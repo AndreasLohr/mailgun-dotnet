@@ -121,13 +121,10 @@ internal sealed class WebhooksService : IWebhooksService
         if (!all && (webhookIds is null || webhookIds.Count == 0))
             throw new ArgumentException("Supply webhookIds or set all=true.", nameof(webhookIds));
 
-        var q = new QueryBuilder().AddArray("webhook_ids", webhookIds);
+        var qb = new QueryBuilder().AddArray("webhook_ids", webhookIds);
         if (all)
-            q.Add("all", "true");
-        var qb = q.Build();
-        var query = qb.Count == 0 ? string.Empty :
-            "?" + string.Join("&", qb.Select(kv => $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value!)}"));
-        return _http.DeleteNoResponseAsync($"v1/webhooks{query}", cancellationToken);
+            qb.Add("all", "true");
+        return _http.DeleteNoResponseAsync("v1/webhooks", qb.Build(), cancellationToken);
     }
 
     private static FormBuilder BuildWebhookForm(string eventType, IReadOnlyList<string> urls)

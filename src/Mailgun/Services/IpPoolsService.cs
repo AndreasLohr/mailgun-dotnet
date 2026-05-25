@@ -25,16 +25,21 @@ public interface IIpPoolsService
     Task ReplaceIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// <c>POST /v3/ip_pools/{poolId}/delegate</c> — delegate a pool to one or more subaccounts.
+    /// <c>PUT /v3/ip_pools/{poolId}/delegate</c> — delegate the pool to one subaccount. The subaccount id
+    /// is sent as a multipart <c>subaccount_id</c> form field per Mailgun's documented contract.
+    /// Call once per subaccount to delegate to more than one.
     /// </summary>
-    Task DelegateAsync(string poolId, IReadOnlyList<string> subaccountIds, CancellationToken cancellationToken = default);
+    Task DelegateAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// <c>GET /v3/ip_pools/{poolId}/delegations</c> — list subaccounts the pool is delegated to.
     /// </summary>
     Task<IpPoolDelegationsResponse> ListDelegationsAsync(string poolId, CancellationToken cancellationToken = default);
 
-    /// <summary><c>DELETE /v3/ip_pools/{poolId}/delegate/{subaccountId}</c> — revoke a delegation.</summary>
+    /// <summary>
+    /// <c>DELETE /v3/ip_pools/{poolId}/delegate</c> — revoke a delegation. The subaccount id is sent
+    /// as a multipart <c>subaccount_id</c> form field in the request body, NOT a path segment.
+    /// </summary>
     Task RevokeDelegationAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default);
 }
 
@@ -68,15 +73,31 @@ public sealed class CreateIpPoolRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+
+    /// <summary>IPs to seed the pool with. Mailgun's wire format is repeated <c>ip</c> form fields (one per IP).</summary>
     public List<string> Ips { get; } = new();
 }
 
-/// <summary>Parameters for <c>PATCH /v3/ip_pools/{poolId}</c>.</summary>
+/// <summary>
+/// Parameters for <c>PATCH /v3/ip_pools/{poolId}</c>. Mailgun's edit endpoint is differential —
+/// you specify what to add/remove, not the full replacement list.
+/// </summary>
 public sealed class UpdateIpPoolRequest
 {
     public string? Name { get; set; }
     public string? Description { get; set; }
-    public List<string> Ips { get; } = new();
+
+    /// <summary>Optional linked sending domain — Mailgun's <c>link_domain</c> field.</summary>
+    public string? LinkDomain { get; set; }
+
+    /// <summary>IPs to add to the pool. Each entry becomes a repeated <c>add_ip</c> form field.</summary>
+    public List<string> AddIps { get; } = new();
+
+    /// <summary>IPs to remove from the pool. Each entry becomes a repeated <c>remove_ip</c> form field.</summary>
+    public List<string> RemoveIps { get; } = new();
+
+    /// <summary>Sending domains to unlink. Each entry becomes a repeated <c>unlink_domain</c> form field.</summary>
+    public List<string> UnlinkDomains { get; } = new();
 }
 
 internal sealed class IpPoolsService : IIpPoolsService
@@ -98,29 +119,39 @@ internal sealed class IpPoolsService : IIpPoolsService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new ArgumentException("Name is required.", nameof(request));
+        // Mailgun's POST /v3/ip_pools takes repeated singular `ip` form fields, not a joined `ips`.
         var fb = new FormBuilder().Add("name", request.Name).Add("description", request.Description);
-        if (request.Ips.Count > 0)
-            fb.Add("ips", string.Join(",", request.Ips));
+        foreach (var ip in request.Ips)
+            fb.Add("ip", ip);
         return _http.PostFormAsync<IpPool>("v3/ip_pools", fb, cancellationToken);
     }
 
-    public Task UpdateAsync(string poolId, UpdateIpPoolRequest request, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(string poolId, UpdateIpPoolRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         ArgumentNullException.ThrowIfNull(request);
-        var fb = new FormBuilder().Add("name", request.Name).Add("description", request.Description);
-        if (request.Ips.Count > 0)
-            fb.Add("ips", string.Join(",", request.Ips));
-        return _http.PutFormNoResponseAsync($"v3/ip_pools/{PathEscape.Segment(poolId)}", fb, cancellationToken);
+        // Mailgun's edit endpoint is documented as PATCH /v3/ip_pools/{pool_id} with multipart/form-data
+        // and differential repeatable fields (add_ip, remove_ip, unlink_domain) — NOT PUT with a joined ips=.
+        using var mp = new MultipartBuilder()
+            .AddText("name", request.Name)
+            .AddText("description", request.Description)
+            .AddText("link_domain", request.LinkDomain);
+        foreach (var ip in request.AddIps) mp.AddText("add_ip", ip);
+        foreach (var ip in request.RemoveIps) mp.AddText("remove_ip", ip);
+        foreach (var d in request.UnlinkDomains) mp.AddText("unlink_domain", d);
+        await _http.PatchMultipartNoResponseAsync(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}", mp, cancellationToken).ConfigureAwait(false);
     }
 
     public Task DeleteAsync(string poolId, string? replacementPool = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        var path = $"v3/ip_pools/{PathEscape.Segment(poolId)}";
-        if (!string.IsNullOrEmpty(replacementPool))
-            path += "?pool_id=" + Uri.EscapeDataString(replacementPool);
-        return _http.DeleteNoResponseAsync(path, cancellationToken);
+        // Route the optional replacement-pool param through the standard query channel so BuildUri
+        // owns escaping (the manual `?pool_id=…` splice that lived here previously is the same
+        // brittle pattern the unsubscribes endpoint just got cleaned up out of).
+        var query = new QueryBuilder().Add("pool_id", replacementPool).Build();
+        return _http.DeleteNoResponseAsync(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}", query, cancellationToken);
     }
 
     public Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default)
@@ -150,16 +181,15 @@ internal sealed class IpPoolsService : IIpPoolsService
             cancellationToken);
     }
 
-    public Task DelegateAsync(string poolId, IReadOnlyList<string> subaccountIds, CancellationToken cancellationToken = default)
+    public async Task DelegateAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        ArgumentNullException.ThrowIfNull(subaccountIds);
-        if (subaccountIds.Count == 0)
-            throw new ArgumentException("At least one subaccount id is required.", nameof(subaccountIds));
-        return _http.PostJsonBodyNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate",
-            new { subaccounts = subaccountIds },
-            cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
+        // Mailgun documents: PUT (not POST), multipart/form-data (not JSON), with a singular `subaccount_id`
+        // field per call. Previous SDK shape sent POST + JSON {subaccounts: [...]} and was rejected.
+        using var mp = new MultipartBuilder().AddText("subaccount_id", subaccountId);
+        await _http.PutMultipartNoResponseAsync(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<IpPoolDelegationsResponse> ListDelegationsAsync(string poolId, CancellationToken cancellationToken = default)
@@ -169,12 +199,13 @@ internal sealed class IpPoolsService : IIpPoolsService
             $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegations", null, cancellationToken);
     }
 
-    public Task RevokeDelegationAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default)
+    public async Task RevokeDelegationAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.DeleteNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate/{PathEscape.Segment(subaccountId)}",
-            cancellationToken);
+        // Subaccount id goes in the multipart body, not the URL path.
+        using var mp = new MultipartBuilder().AddText("subaccount_id", subaccountId);
+        await _http.DeleteMultipartNoResponseAsync(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken).ConfigureAwait(false);
     }
 }

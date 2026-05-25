@@ -162,8 +162,10 @@ public class GapFillerTests
     // ── IpPools gaps ──
 
     [Fact]
-    public async Task IpPools_Update_PutsForm_and_RemoveIp_calls_delete()
+    public async Task IpPools_Update_PatchesMultipart_and_RemoveIp_calls_delete()
     {
+        // Mailgun documents PATCH /v3/ip_pools/{id} with multipart and repeatable add_ip / remove_ip,
+        // not PUT with a joined "ips=" form field.
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
@@ -172,13 +174,19 @@ public class GapFillerTests
         {
             Name = "renamed",
             Description = "d",
-            Ips = { "1.1.1.1" },
+            AddIps = { "1.1.1.1" },
+            RemoveIps = { "3.3.3.3" },
         });
         await client.IpPools.RemoveIpAsync("p1", "2.2.2.2");
 
-        Assert.Equal(HttpMethod.Put, handler.Requests[0].Method);
-        Assert.Contains("name=renamed", handler.Requests[0].Body!, StringComparison.Ordinal);
-        Assert.Contains("ips=1.1.1.1", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Equal(HttpMethod.Patch, handler.Requests[0].Method);
+        Assert.EndsWith("/v3/ip_pools/p1", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal("multipart/form-data", handler.Requests[0].ContentType);
+        Assert.Contains("renamed", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("add_ip", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("1.1.1.1", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("remove_ip", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("3.3.3.3", handler.Requests[0].Body!, StringComparison.Ordinal);
         Assert.Equal(HttpMethod.Delete, handler.Requests[1].Method);
         Assert.EndsWith("/v3/ip_pools/p1/ips/2.2.2.2", handler.Requests[1].Uri.AbsolutePath);
     }

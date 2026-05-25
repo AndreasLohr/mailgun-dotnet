@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Mailgun.Http;
 using Mailgun.Internal;
 using Mailgun.Models.MailingLists;
@@ -138,9 +139,27 @@ internal sealed class MailingListsService : IMailingListsService
         if (members.Count > 1000)
             throw new ArgumentException("Mailgun bulk add accepts at most 1000 members per call.", nameof(members));
 
-        var json = JsonSerializer.Serialize(
-            members.Select(m => new BulkMemberDto(m.Address, m.Name, m.Subscribed, m.Vars)),
-            MailgunJsonOptions.Default);
+        // Mailgun's POST /v3/lists/{list}/members.json expects each member's `vars` as a NESTED JSON
+        // OBJECT, not a JSON-encoded string. AddMemberRequest.Vars is a string for compatibility with
+        // the single-member form path (where Mailgun accepts a JSON-string-typed form field), so we
+        // parse it into a JsonNode here before embedding. Invalid JSON for any member raises a
+        // clear ArgumentException that pinpoints the offending address.
+        var dtos = new List<BulkMemberDto>(members.Count);
+        foreach (var m in members)
+        {
+            JsonNode? vars = null;
+            if (!string.IsNullOrEmpty(m.Vars))
+            {
+                try { vars = JsonNode.Parse(m.Vars); }
+                catch (JsonException ex)
+                {
+                    throw new ArgumentException(
+                        $"Member '{m.Address}' has Vars that is not valid JSON: {ex.Message}", nameof(members), ex);
+                }
+            }
+            dtos.Add(new BulkMemberDto(m.Address, m.Name, m.Subscribed, vars));
+        }
+        var json = JsonSerializer.Serialize(dtos, MailgunJsonOptions.Default);
         var fb = new FormBuilder().Add("members", json).Add("upsert", upsert);
         return _http.PostFormNoResponseAsync($"v3/lists/{PathEscape.Segment(listAddress)}/members.json", fb, cancellationToken);
     }
@@ -166,5 +185,5 @@ internal sealed class MailingListsService : IMailingListsService
         return fb;
     }
 
-    private sealed record BulkMemberDto(string Address, string? Name, bool? Subscribed, string? Vars);
+    private sealed record BulkMemberDto(string Address, string? Name, bool? Subscribed, JsonNode? Vars);
 }

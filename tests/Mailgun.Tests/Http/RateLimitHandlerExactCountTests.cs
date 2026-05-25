@@ -60,6 +60,23 @@ public class RateLimitHandlerExactCountTests
     }
 
     [Fact]
+    public async Task Action_endpoint_path_is_not_retried_on_5xx_even_with_idempotent_method()
+    {
+        // Regression for #21: DkimSecurity.RotateAsync uses PUT, which the handler normally treats
+        // as idempotent + retries on 5xx. But each /rotate-dkim-key call generates a brand-new
+        // DKIM key, so retrying after a transient 5xx would silently double-rotate. The handler
+        // must NOT retry on paths whose last segment is a side-effecting verb.
+        var (client, counter) = Build(3,
+            HttpStatusCode.InternalServerError, // first call returns 500
+            HttpStatusCode.OK);
+
+        await Assert.ThrowsAsync<MailgunApiException>(() => client.DkimSecurity.RotateAsync("mg.example.com"));
+
+        // Exactly one call — no retry — even though PUT would normally be retried on 5xx.
+        Assert.Equal(1, counter.CallCount);
+    }
+
+    [Fact]
     public async Task Four_429s_with_max_retries_three_throws_after_exactly_four_calls()
     {
         var (client, counter) = Build(3, HttpStatusCode.TooManyRequests, HttpStatusCode.TooManyRequests,

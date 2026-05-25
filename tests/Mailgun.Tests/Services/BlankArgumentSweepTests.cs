@@ -197,8 +197,8 @@ public class BlankArgumentSweepTests
         var (c, _) = C();
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.ReplaceIpsAsync("", new[] { "1.1.1.1" }));
         await Assert.ThrowsAsync<ArgumentNullException>(() => c.IpPools.ReplaceIpsAsync("p", null!));
-        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.DelegateAsync("", new[] { "a" }));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => c.IpPools.DelegateAsync("p", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.DelegateAsync("", "a"));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.DelegateAsync("p", ""));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.ListDelegationsAsync(""));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.RevokeDelegationAsync("", "a"));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.RevokeDelegationAsync("p", ""));

@@ -25,7 +25,7 @@ internal sealed class RateLimitHandler : DelegatingHandler
         {
             var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
-            if (!ShouldRetry(response.StatusCode, request.Method) || attempt >= _maxRetries)
+            if (!ShouldRetry(response.StatusCode, request.Method, request.RequestUri) || attempt >= _maxRetries)
             {
                 return response;
             }
@@ -37,12 +37,12 @@ internal sealed class RateLimitHandler : DelegatingHandler
         }
     }
 
-    private static bool ShouldRetry(HttpStatusCode status, HttpMethod method)
+    private static bool ShouldRetry(HttpStatusCode status, HttpMethod method, Uri? uri)
     {
         if (status == HttpStatusCode.TooManyRequests)
             return true;
         if ((int)status >= 500)
-            return IsIdempotent(method);
+            return IsIdempotent(method) && !IsActionEndpoint(uri);
         return false;
     }
 
@@ -52,6 +52,22 @@ internal sealed class RateLimitHandler : DelegatingHandler
         || method == HttpMethod.Put
         || method == HttpMethod.Delete
         || method == HttpMethod.Options;
+
+    /// <summary>
+    /// True when the request hits a Mailgun action endpoint that generates a side-effect every call,
+    /// regardless of HTTP method semantics. <c>PUT /v1/dkim_management/{domain}/rotate-dkim-key</c>
+    /// is the canonical case — each call generates a brand-new DKIM key. Retrying on a transient
+    /// 5xx after the server already rotated would silently double-rotate, leaving the caller without
+    /// the first key's public material and the DNS state pointing at a superseded key.
+    /// </summary>
+    private static bool IsActionEndpoint(Uri? uri)
+    {
+        if (uri is null) return false;
+        var path = uri.AbsolutePath;
+        return path.Contains("/rotate", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/regenerate", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/refresh", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static TimeSpan ComputeDelay(HttpResponseMessage response, int attempt)
     {

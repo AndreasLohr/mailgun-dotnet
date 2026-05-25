@@ -94,8 +94,10 @@ public class IpServicesTests
     }
 
     [Fact]
-    public async Task IpPools_Create_posts_form_with_ips_comma_joined()
+    public async Task IpPools_Create_posts_form_with_repeated_singular_ip_fields()
     {
+        // Mailgun's POST /v3/ip_pools takes repeated singular `ip` form fields, not a single
+        // comma-joined `ips=` value (which it silently dropped).
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"pool_id\":\"p1\"}");
 
@@ -110,7 +112,9 @@ public class IpServicesTests
         Assert.Equal(HttpMethod.Post, req.Method);
         Assert.Contains("name=warm", req.Body!, StringComparison.Ordinal);
         Assert.Contains("description=warmup+pool", req.Body!, StringComparison.Ordinal);
-        Assert.Contains("ips=1.1.1.1%2C2.2.2.2", req.Body!, StringComparison.Ordinal);
+        Assert.Contains("ip=1.1.1.1", req.Body!, StringComparison.Ordinal);
+        Assert.Contains("ip=2.2.2.2", req.Body!, StringComparison.Ordinal);
+        Assert.DoesNotContain("ips=", req.Body!, StringComparison.Ordinal);
     }
 
     [Fact]

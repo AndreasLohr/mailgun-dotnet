@@ -118,6 +118,14 @@ internal sealed class MailgunHttpClient : IDisposable
     public Task PutMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
         SendNoBodyAsync(HttpMethod.Put, path, query: null, content: mp.Build(), ct);
 
+    /// <summary>PATCH with a multipart body — used by IP-pool editing per Mailgun's documented contract.</summary>
+    public Task PatchMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
+        SendNoBodyAsync(HttpMethod.Patch, path, query: null, content: mp.Build(), ct);
+
+    /// <summary>DELETE with a multipart body — used by IP-pool delegation revoke (subaccount in the body, not the path).</summary>
+    public Task DeleteMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: mp.Build(), ct);
+
     public Task<TResponse> PostJsonBodyAsync<TResponse>(string path, object body, CancellationToken ct) =>
         SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: BuildJsonContent(body), ct);
 

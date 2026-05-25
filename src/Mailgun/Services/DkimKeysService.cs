@@ -140,8 +140,11 @@ internal sealed class DkimKeysService : IDkimKeysService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(signingDomain);
         ArgumentException.ThrowIfNullOrWhiteSpace(selector);
-        var path = $"v1/dkim/keys?signing_domain={Uri.EscapeDataString(signingDomain)}&selector={Uri.EscapeDataString(selector)}";
-        return _http.DeleteNoResponseAsync(path, cancellationToken);
+        var query = new QueryBuilder()
+            .Add("signing_domain", signingDomain)
+            .Add("selector", selector)
+            .Build();
+        return _http.DeleteNoResponseAsync("v1/dkim/keys", query, cancellationToken);
     }
 
     public Task<DkimKeyListResponse> ListForAuthorityAsync(string authority, CancellationToken cancellationToken = default)
