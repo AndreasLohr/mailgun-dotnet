@@ -1,0 +1,272 @@
+using System.Net;
+using Mailgun.Services;
+using Mailgun.Tests.TestHelpers;
+
+namespace Mailgun.Tests.Services;
+
+public class ExtendedServicesTests
+{
+    // ── IPs extensions ──
+
+    [Fact]
+    public async Task Ips_GetReputationBand_hits_ip_band_subpath()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK,
+            "{\"ip\":\"1.2.3.4\",\"band\":\"healthy\",\"score\":0.92}");
+
+        var b = await client.Ips.GetReputationBandAsync("1.2.3.4");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v3/ips/1.2.3.4/ip_band", req.Uri.AbsolutePath);
+        Assert.Equal("healthy", b.Band);
+        Assert.Equal(0.92, b.Score);
+    }
+
+    [Fact]
+    public async Task Ips_ListDetailed_hits_v3_ips_details()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[],\"total_count\":0}");
+
+        await client.Ips.ListDetailedAsync();
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v3/ips/details", req.Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Ips_ListAllAccountIps_hits_v3_ips_all()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[],\"total_count\":0}");
+
+        await client.Ips.ListAllAccountIpsAsync();
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v3/ips/all", req.Uri.AbsolutePath);
+    }
+
+    // ── IpPools extensions ──
+
+    [Fact]
+    public async Task IpPools_ReplaceIps_posts_json_with_ips_array_to_ips_json_subpath()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.IpPools.ReplaceIpsAsync("p1", new[] { "1.1.1.1", "2.2.2.2" });
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, req.Method);
+        Assert.Equal("application/json", req.ContentType);
+        Assert.EndsWith("/v3/ip_pools/p1/ips.json", req.Uri.AbsolutePath);
+        Assert.Contains("\"ips\":[\"1.1.1.1\",\"2.2.2.2\"]", req.Body!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task IpPools_Delegate_posts_subaccounts_array()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.IpPools.DelegateAsync("p1", new[] { "acct_a", "acct_b" });
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v3/ip_pools/p1/delegate", req.Uri.AbsolutePath);
+        Assert.Contains("\"subaccounts\":[\"acct_a\",\"acct_b\"]", req.Body!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task IpPools_Delegate_rejects_empty_subaccount_list()
+    {
+        var (client, _) = TestMailgunClient.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.IpPools.DelegateAsync("p1", Array.Empty<string>()));
+    }
+
+    [Fact]
+    public async Task IpPools_ListDelegations_and_RevokeDelegation_use_correct_paths()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"subaccounts\":[\"acct_a\"]}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.IpPools.ListDelegationsAsync("p1");
+        await client.IpPools.RevokeDelegationAsync("p1", "acct_a");
+
+        Assert.EndsWith("/v3/ip_pools/p1/delegations", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Delete, handler.Requests[1].Method);
+        Assert.EndsWith("/v3/ip_pools/p1/delegate/acct_a", handler.Requests[1].Uri.AbsolutePath);
+    }
+
+    // ── InboxPlacement extensions ──
+
+    [Fact]
+    public async Task InboxPlacement_DeleteResult_calls_DELETE()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.InboxPlacement.DeleteResultAsync("r_1");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Delete, req.Method);
+        Assert.EndsWith("/v4/inbox/results/r_1", req.Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task InboxPlacement_GetResultDetails_and_GetResultCounters_use_subpaths()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"id\":\"r_1\",\"providers\":[{\"provider\":\"gmail\",\"inbox\":5}]}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"inbox\":5,\"spam\":1,\"missing\":0,\"total\":6}");
+
+        var details = await client.InboxPlacement.GetResultDetailsAsync("r_1");
+        var counters = await client.InboxPlacement.GetResultCountersAsync("r_1");
+
+        Assert.EndsWith("/v4/inbox/results/r_1/details", handler.Requests[0].Uri.AbsolutePath);
+        Assert.EndsWith("/v4/inbox/results/r_1/counters", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Single(details.Providers!);
+        Assert.Equal(6, counters.Total);
+    }
+
+    [Fact]
+    public async Task InboxPlacement_AddSeed_and_RemoveSeed_use_email_subpath()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.InboxPlacement.AddSeedAsync("main", "seed@example.com");
+        await client.InboxPlacement.RemoveSeedAsync("main", "seed@example.com");
+
+        Assert.EndsWith("/v4/inbox/seedlists/main/seeds", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Contains("\"email\":\"seed@example.com\"", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Equal(HttpMethod.Delete, handler.Requests[1].Method);
+        Assert.EndsWith("/v4/inbox/seedlists/main/seeds/seed%40example.com", handler.Requests[1].Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task InboxPlacement_ListResultsForSeedlist_uses_seedlist_subpath()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[]}");
+
+        await client.InboxPlacement.ListResultsForSeedlistAsync("main");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v4/inbox/seedlists/main/results", req.Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task InboxPlacement_FilterResults_serializes_filter_as_query_string()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[]}");
+
+        await client.InboxPlacement.FilterResultsAsync(new InboxPlacementResultsFilter
+        {
+            Subject = "Promo",
+            FromDomain = "mg.example.com",
+            Seedlist = "main",
+            Limit = 50,
+        });
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v4/inbox/results/filter", req.Uri.AbsolutePath);
+        var q = req.Uri.Query.TrimStart('?');
+        Assert.Contains("subject=Promo", q, StringComparison.Ordinal);
+        Assert.Contains("from_domain=mg.example.com", q, StringComparison.Ordinal);
+        Assert.Contains("seedlist=main", q, StringComparison.Ordinal);
+        Assert.Contains("limit=50", q, StringComparison.Ordinal);
+    }
+
+    // ── BounceClassification extensions ──
+
+    [Fact]
+    public async Task BounceClassification_ListCodes_hits_classification_codes_subpath()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[\"550\",\"552\"]}");
+
+        var r = await client.BounceClassification.ListCodesAsync("HARD");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v1/bounce-classification/HARD/codes", req.Uri.AbsolutePath);
+        Assert.Equal(2, r.Items!.Count);
+    }
+
+    [Fact]
+    public async Task BounceClassification_Classify_posts_json_to_classify_endpoint()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"code\":\"HARD\",\"category\":\"permanent\"}");
+
+        var c = await client.BounceClassification.ClassifyAsync(new ClassifyBounceRequest
+        {
+            Status = "5.1.1",
+            Code = "550",
+            Message = "Mailbox does not exist",
+        });
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, req.Method);
+        Assert.EndsWith("/v1/bounce-classification/classify", req.Uri.AbsolutePath);
+        Assert.Contains("\"status\":\"5.1.1\"", req.Body!, StringComparison.Ordinal);
+        Assert.Equal("HARD", c.Code);
+        Assert.Equal("permanent", c.Category);
+    }
+
+    [Fact]
+    public async Task BounceClassification_ListCategories_ListDimensions_ListMetricsCodes()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[]}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[]}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[]}");
+
+        await client.BounceClassification.ListCategoriesAsync();
+        await client.BounceClassification.ListDimensionsAsync();
+        await client.BounceClassification.ListMetricsCodesAsync();
+
+        Assert.EndsWith("/v1/bounce-classification/categories", handler.Requests[0].Uri.AbsolutePath);
+        Assert.EndsWith("/v2/bounce-classification/metrics/dimensions", handler.Requests[1].Uri.AbsolutePath);
+        Assert.EndsWith("/v2/bounce-classification/metrics/codes", handler.Requests[2].Uri.AbsolutePath);
+    }
+
+    // ── Limits extensions ──
+
+    [Fact]
+    public async Task Limits_Enable_and_Disable_post_empty_json_to_enable_disable_subpaths()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
+
+        await client.Limits.EnableAsync();
+        await client.Limits.DisableAsync();
+
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.Equal(HttpMethod.Post, handler.Requests[0].Method);
+        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
+        Assert.EndsWith("/v1/thresholds/limits/enable", handler.Requests[0].Uri.AbsolutePath);
+        Assert.EndsWith("/v1/thresholds/limits/disable", handler.Requests[1].Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Limits_GetUsage_returns_typed_usage_response()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK,
+            "{\"daily_used\":1234,\"daily_remaining\":8766,\"monthly_used\":5000,\"enabled\":true}");
+
+        var u = await client.Limits.GetUsageAsync();
+
+        var req = Assert.Single(handler.Requests);
+        Assert.EndsWith("/v1/thresholds/limits/usage", req.Uri.AbsolutePath);
+        Assert.Equal(1234, u.DailyUsed);
+        Assert.Equal(8766, u.DailyRemaining);
+        Assert.True(u.Enabled);
+    }
+}

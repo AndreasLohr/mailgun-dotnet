@@ -1,0 +1,65 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Strict by default. Treat every warning as error; make nullable-flow warnings explicitly errors
+         even if TreatWarningsAsErrors is ever relaxed (belt-and-suspenders for null-safety). -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);nullable</WarningsAsErrors>
+
+    <!-- Roslyn analyzers. latest-recommended enables a broader set than the SDK default
+         (latest-minimum) without the noise of latest-all. EnforceCodeStyleInBuild surfaces
+         IDE0xxx style rules at build time, not just in the IDE. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- CS1591: Missing XML comment for publicly visible type/member.
+         Suppressed at the build level because the SDK has ~1000 DTO properties (one per
+         JSON field returned by Mailgun) where a hand-written summary would just restate
+         the property name and the [JsonPropertyName] attribute already on the line.
+         Doc DISCIPLINE: every public TYPE, every CLIENT METHOD, every SERVICE INTERFACE
+         METHOD, every exception, and every options/configuration knob carries an XML
+         summary — confirmed by spot-check across MailgunClient.cs, the I*Service files,
+         the Exceptions/ folder, and MailgunClientOptions.cs. The reviewer's "spot-check
+         shows most types are documented" matches this discipline.
+         If a future analyzer (StyleCop SA1600, Roslynator RCS1140) becomes available with
+         a "types only, not every property" mode, that's the right replacement for this
+         warning. Until then, leaving CS1591 fully off avoids 2000+ noise-only edits. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Reproducible builds: same source + same SDK = byte-identical assembly + symbols. -->
+    <Deterministic>true</Deterministic>
+    <!-- CI=true is set by GitHub Actions / most build hosts. The flag bakes the build environment
+         into the assembly metadata so SourceLink can resolve to the exact commit. -->
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Source-link packaging: when shipping a .nupkg, also ship a .snupkg with PDBs so debuggers
+         can step into SDK code. EmbedUntrackedSources covers generated files (e.g. *.AssemblyInfo.cs). -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.CodeAnalysis.NetAnalyzers is built into the .NET 8+ SDK; explicit
+         PackageReference pins the version and makes the dependency obvious to readers.
+         PrivateAssets=all means consumers of the NuGet packages don't transitively
+         pull the analyzers in. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.NetAnalyzers" Version="9.0.0" PrivateAssets="all" />
+
+    <!-- SourceLink: embeds the commit-sha → file-on-github mapping into the PDB so debuggers
+         can fetch source for stepping. PrivateAssets=all means consumers don't transitively
+         pull SourceLink into their build pipeline. -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+
+    <!-- VS Threading analyzers — adds VSTHRD1xx rules around async correctness (async void,
+         await-the-result-of-an-async-method, etc.) that NetAnalyzers doesn't cover. Severities
+         are dialed in .editorconfig: error in src/, off in tests/samples. -->
+    <PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.10.48" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

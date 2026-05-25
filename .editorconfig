@@ -1,0 +1,97 @@
+root = true
+
+###############################
+# Common
+###############################
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+###############################
+# C#
+###############################
+[*.{cs,csx}]
+indent_size = 4
+tab_width = 4
+
+# File-scoped namespaces (matches the codebase)
+csharp_style_namespace_declarations = file_scoped:warning
+
+# var preferences — minimal, leave to author judgement
+csharp_style_var_for_built_in_types = true:silent
+csharp_style_var_when_type_is_apparent = true:silent
+csharp_style_var_elsewhere = true:silent
+
+# Modern language features
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_properties = true:silent
+csharp_style_expression_bodied_accessors = true:silent
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_prefer_simple_using_statement = true:suggestion
+
+# Layout
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = false
+
+###############################
+# Project / build files
+###############################
+[*.{csproj,props,targets,slnx}]
+indent_size = 2
+
+###############################
+# Roslyn analyzer rule severities — library code
+###############################
+[src/**/*.cs]
+# CA2007: Do not directly await a Task — library code must call ConfigureAwait(false) so it
+# doesn't capture the caller's SynchronizationContext (UI apps and classic ASP.NET deadlock
+# otherwise).
+dotnet_diagnostic.CA2007.severity = error
+
+# VSTHRD threading analyzers from Microsoft.VisualStudio.Threading.Analyzers:
+dotnet_diagnostic.VSTHRD100.severity = error   # Avoid async void methods
+dotnet_diagnostic.VSTHRD101.severity = error   # Avoid unsupported async delegates
+dotnet_diagnostic.VSTHRD103.severity = error   # Call async methods when in async methods
+dotnet_diagnostic.VSTHRD110.severity = error   # Observe the awaitable result of an async method
+dotnet_diagnostic.VSTHRD111.severity = none    # Use .ConfigureAwait(bool) — overlaps with CA2007; CA2007 handles it
+dotnet_diagnostic.VSTHRD114.severity = error   # Avoid returning null from a Task-returning method
+# VSTHRD200: Use "Async" suffix in awaitable-returning method names. Off — IAsyncEnumerable
+# iterator entry points (`AsPages()`, etc.) conventionally drop the suffix, and renaming public
+# APIs to add it would be a SemVer-major breaking change for a rule that's a style preference.
+dotnet_diagnostic.VSTHRD200.severity = none
+
+###############################
+# Tests + samples relax the async-strictness rules
+# - xUnit owns the SyncContext, so ConfigureAwait(false) is just noise.
+# - Tests + samples don't ship to consumers, so library-author hygiene isn't required.
+###############################
+[{tests,samples}/**/*.cs]
+dotnet_diagnostic.CA2007.severity = none
+dotnet_diagnostic.VSTHRD003.severity = none    # Tests intentionally await TaskCompletionSource.Task (gated handler)
+dotnet_diagnostic.VSTHRD100.severity = none
+dotnet_diagnostic.VSTHRD103.severity = none    # Tests call sync Dispose() to assert lifetime; not deadlock-prone here
+dotnet_diagnostic.VSTHRD110.severity = none
