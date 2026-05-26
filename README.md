@@ -14,12 +14,12 @@ A .NET SDK for the [Mailgun](https://documentation.mailgun.com/) HTTP API. Cover
 - **Typed end-to-end** — request and response DTOs for every endpoint; `System.Text.Json` with snake_case mapping, RFC-2822, and Unix-timestamp converters.
 - **Two-region deployment** — `MailgunRegion.Us` → `api.mailgun.net`, `MailgunRegion.Eu` → `api.eu.mailgun.net`. Selected at construction time with no per-call overhead.
 - **Subaccount impersonation** — `client.ForSubaccount("acct_id")` returns a derived client sharing the parent's transport with `X-Mailgun-On-Behalf-Of` injected on every request.
-- **Idiomatic async pagination** — `AsyncPageable<T>` supports both item-by-item (`await foreach`) and page-by-page (`AsPages()`) enumeration, with `CancellationToken` propagation through `[EnumeratorCancellation]`.
+- **Idiomatic async pagination** — `AsyncPageable<T>` supports both item-by-item ([`await foreach`](https://learn.microsoft.com/dotnet/api/system.collections.generic.iasyncenumerable-1)) and page-by-page (`AsPages()`) enumeration, with `CancellationToken` propagation through `[EnumeratorCancellation]`.
 - **Built-in retries** — `X-RateLimit-Reset`-aware backoff for 429 (with `Retry-After` fallback), plus idempotent-only 5xx retry (POSTs aren't replayed on 5xx).
 - **Structured exceptions** — `MailgunApiException` exposes the HTTP status, parsed message + details, `X-Mailgun-Request-Id`, and rate-limit headers. `MailgunRateLimitException` is a distinct subtype for catch-block branching.
-- **DI-friendly** — opt-in `mailgun-dotnet.Extensions.DependencyInjection` package wires `IMailgunClient` through `IHttpClientFactory`. The core package has zero `Microsoft.Extensions.*` dependencies so it runs in console apps, AWS Lambda, Azure Functions, Unity, etc.
-- **Typed webhook receiver** — opt-in `mailgun-dotnet.Webhooks` + `mailgun-dotnet.AspNetCore` companion packages. Parses Mailgun's 8 event types into strongly-typed events, verifies HMAC-SHA256 signatures with constant-time compare and an optional anti-replay token cache, and ships a one-line `MapMailgunWebhook` endpoint helper.
-- **OpenTelemetry-native tracing + metrics** — `MailgunActivitySource` emits a client span per HTTP call; `MailgunMeter` emits `mailgun.client.*` instruments (request duration histogram, retries / errors counters, active-requests gauge) tagged with route templates so per-endpoint dashboards stay low-cardinality. Both share the name `"Mailgun"`. Zero NuGet dependencies, zero cost when no listener is attached.
+- **DI-friendly** — opt-in `mailgun-dotnet.Extensions.DependencyInjection` package wires `IMailgunClient` through [`IHttpClientFactory`](https://learn.microsoft.com/dotnet/core/extensions/httpclient-factory). The core package has zero `Microsoft.Extensions.*` dependencies so it runs in console apps, AWS Lambda, Azure Functions, Unity, etc.
+- **Typed webhook receiver** — opt-in `mailgun-dotnet.Webhooks` + `mailgun-dotnet.AspNetCore` companion packages. Parses Mailgun's 8 event types into strongly-typed events, verifies [HMAC-SHA256](https://en.wikipedia.org/wiki/HMAC) signatures with constant-time compare and an optional anti-replay token cache, and ships a one-line `MapMailgunWebhook` endpoint helper.
+- **[OpenTelemetry](https://opentelemetry.io)-native tracing + metrics** — `MailgunActivitySource` emits a client span per HTTP call; `MailgunMeter` emits `mailgun.client.*` instruments (request duration histogram, retries / errors counters, active-requests gauge) tagged with route templates so per-endpoint dashboards stay low-cardinality. Both share the name `"Mailgun"`. Zero NuGet dependencies, zero cost when no listener is attached.
 - **Mutation-tested** — Stryker.NET is wired as a local tool. Current baseline: 75.4% overall mutation score, ~77% covered-code kill rate (see [Mutation testing](#mutation-testing) for the round-by-round table).
 - **Multi-target** — `net8.0` and `net10.0`.
 
@@ -105,7 +105,7 @@ builder.Services.AddMailgun(opts =>                                        // pu
 });
 ```
 
-`AddMailgun` returns `IHttpClientBuilder`, so resilience and observability policies chain naturally on top of the SDK's built-in 429/idempotent-5xx retries:
+`AddMailgun` returns [`IHttpClientBuilder`](https://learn.microsoft.com/dotnet/api/microsoft.extensions.dependencyinjection.ihttpclientbuilder), so resilience and observability policies chain naturally on top of the SDK's built-in 429/idempotent-5xx retries:
 
 ```csharp
 builder.Services.AddMailgun(builder.Configuration)
@@ -314,7 +314,7 @@ The helper returns 200 on success, 401 on invalid signature or stale timestamp, 
 
 ### Replay protection across multiple instances
 
-`InMemoryWebhookTokenCache` keeps the seen-token set in a per-process `ConcurrentDictionary`. That's the right choice for a single instance but degrades silently when the receiver runs behind more than one pod / VM / container: a token replayed against a different instance hits a fresh dictionary and is accepted. For any multi-instance topology, install `mailgun-dotnet.Webhooks.DistributedCache` and wire it through `IDistributedCache`:
+`InMemoryWebhookTokenCache` keeps the seen-token set in a per-process `ConcurrentDictionary`. That's the right choice for a single instance but degrades silently when the receiver runs behind more than one pod / VM / container: a token replayed against a different instance hits a fresh dictionary and is accepted. For any multi-instance topology, install `mailgun-dotnet.Webhooks.DistributedCache` and wire it through [`IDistributedCache`](https://learn.microsoft.com/aspnet/core/performance/caching/distributed):
 
 ```bash
 dotnet add package mailgun-dotnet.Webhooks.DistributedCache
@@ -345,7 +345,7 @@ app.MapMailgunWebhook("/webhooks/mailgun",
 
 ## OpenTelemetry tracing
 
-The SDK emits a client span per HTTP call on the `MailgunActivitySource` (name = `"Mailgun"`). Subscribe by registering the source with your OpenTelemetry tracer provider — there are zero NuGet dependencies on OpenTelemetry, and zero cost when no listener is attached.
+The SDK emits a [client span](https://learn.microsoft.com/dotnet/core/diagnostics/distributed-tracing-instrumentation-walkthroughs) per HTTP call on the `MailgunActivitySource` (name = `"Mailgun"`). Subscribe by registering the source with your OpenTelemetry tracer provider — there are zero NuGet dependencies on OpenTelemetry, and zero cost when no listener is attached.
 
 ```csharp
 using Mailgun.Http;
@@ -369,7 +369,7 @@ Emitted span tags per request:
 
 ## OpenTelemetry metrics
 
-Alongside the per-request span, the SDK emits four instruments on a `MailgunMeter` (name = `"Mailgun"`, same as the activity source). Subscribe by registering the meter with your OpenTelemetry meter provider — zero NuGet dependencies, zero cost when no listener is attached.
+Alongside the per-request span, the SDK emits four [instruments](https://learn.microsoft.com/dotnet/core/diagnostics/metrics-instrumentation) on a `MailgunMeter` (name = `"Mailgun"`, same as the activity source). Subscribe by registering the meter with your OpenTelemetry meter provider — zero NuGet dependencies, zero cost when no listener is attached.
 
 ```csharp
 using Mailgun.Http;
