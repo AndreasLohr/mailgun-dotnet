@@ -86,8 +86,10 @@ internal sealed class MultipartBuilder : IDisposable
     /// Adds a file part from a caller-supplied stream. The stream is read fully into memory
     /// before being attached so the request is retry-safe — the SDK's <c>RateLimitHandler</c>
     /// re-sends the same <see cref="HttpRequestMessage"/> on 429 / idempotent-5xx, which a
-    /// non-rewindable <c>StreamContent</c> would not survive. The caller's stream is then
-    /// disposed alongside this builder.
+    /// non-rewindable <c>StreamContent</c> would not survive. Caller retains ownership of
+    /// <paramref name="stream"/>; this method does NOT dispose it — the bytes are already
+    /// copied so the caller is free to rewind, reuse, retry at a higher level, or leave the
+    /// stream open as part of a longer-lived pipeline.
     /// </summary>
     public MultipartBuilder AddFile(string name, string fileName, Stream stream, string? mediaType = null)
     {
@@ -108,9 +110,6 @@ internal sealed class MultipartBuilder : IDisposable
         using var copy = new MemoryStream();
         stream.CopyTo(copy);
         var buffer = copy.ToArray();
-        // Take ownership of the caller's stream so callers can use a single `using` for the
-        // builder (matches the byte[] overload's lifetime expectations).
-        _disposables.Add(stream);
 
         var bc = new ByteArrayContent(buffer);
         if (!string.IsNullOrWhiteSpace(mediaType))

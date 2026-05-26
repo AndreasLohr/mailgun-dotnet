@@ -351,7 +351,6 @@ The SDK ships **non-deprecated** endpoints only. Legacy surfaces explicitly **no
 | `/v3/stats/*`, `/v3/{domain}/stats/*` | `POST /v1/analytics/metrics` (`client.Analytics.QueryMetricsAsync`) |
 | `/v3/{domain}/tags*` | `/v1/analytics/tags` + analytics-metrics with tag dimensions (`client.AnalyticsTags`) |
 | `/v3/{domain}/templates*` | `/v4/templates` (`client.Templates`) |
-| `/v3/domains/{domain}/webhooks/*` | `/v4/domains/{domain}/webhooks` (`client.Webhooks`) |
 | `/v3/forwards` | `/v3/routes` (`client.Routes`) |
 | `/v2/x509/*` | (No replacement; Mailgun manages TLS automatically.) |
 

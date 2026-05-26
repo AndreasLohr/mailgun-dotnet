@@ -152,4 +152,15 @@ public class SuppressionsFullCoverageTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             client.Suppressions.Allowlists.CreateAsync("d"));
     }
+
+    [Fact]
+    public async Task Allowlists_Create_rejects_both_address_and_domain_together()
+    {
+        // The public interface promises "Either address or domainValue must be set (not both)."
+        // Previously only the neither-supplied case was rejected; supplying both let an ambiguous
+        // request through to Mailgun.
+        var (client, _) = TestMailgunClient.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.Suppressions.Allowlists.CreateAsync("d", address: "x@y.com", domainValue: "y.com"));
+    }
 }

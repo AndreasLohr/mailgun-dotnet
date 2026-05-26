@@ -60,15 +60,15 @@ public static class MailgunWebhookParser
         {
             using var doc = JsonDocument.Parse(utf8Json);
             if (doc.RootElement.TryGetProperty("signature", out var sig)
-                && sig.TryGetProperty("timestamp", out var t)
-                && sig.TryGetProperty("token", out var tk)
-                && sig.TryGetProperty("signature", out var s))
+                && TryReadStringProperty(sig, "timestamp", out var timestamp)
+                && TryReadStringProperty(sig, "token", out var token)
+                && TryReadStringProperty(sig, "signature", out var sigValue))
             {
                 signature = new WebhookSignature
                 {
-                    Timestamp = t.GetString() ?? string.Empty,
-                    Token = tk.GetString() ?? string.Empty,
-                    Signature = s.GetString() ?? string.Empty,
+                    Timestamp = timestamp,
+                    Token = token,
+                    Signature = sigValue,
                 };
                 return true;
             }
@@ -79,6 +79,28 @@ public static class MailgunWebhookParser
         }
         signature = new WebhookSignature();
         return false;
+    }
+
+    /// <summary>
+    /// Reads a non-empty string property from <paramref name="obj"/>. Returns <c>false</c> if the
+    /// property is missing, JSON-null, or any non-string kind (number, array, object). Critical for
+    /// the public <see cref="TryExtractSignature"/> Try-pattern: <see cref="JsonElement.GetString"/>
+    /// throws <see cref="InvalidOperationException"/> on non-string/non-null kinds, which would
+    /// escape the <see cref="JsonException"/>-only catch and surface as an unhandled exception in
+    /// webhook receivers.
+    /// </summary>
+    private static bool TryReadStringProperty(JsonElement obj, string name, out string value)
+    {
+        value = string.Empty;
+        if (!obj.TryGetProperty(name, out var prop))
+            return false;
+        if (prop.ValueKind != JsonValueKind.String)
+            return false;
+        var raw = prop.GetString();
+        if (string.IsNullOrEmpty(raw))
+            return false;
+        value = raw;
+        return true;
     }
 
     private static MailgunWebhookEvent ParseDocument(JsonDocument doc)
@@ -93,11 +115,15 @@ public static class MailgunWebhookParser
             eventData = ed;
             if (root.TryGetProperty("signature", out var sig))
             {
+                // Mirror TryExtractSignature's guard: a non-string ValueKind on these fields would
+                // otherwise crash Parse with InvalidOperationException, which is awkward for webhook
+                // receivers that already handle JsonException. Wrong-typed fields degrade to empty
+                // strings; HMAC verification will then fail cleanly, which is the right outcome.
                 signature = new WebhookSignature
                 {
-                    Timestamp = sig.TryGetProperty("timestamp", out var t) ? (t.GetString() ?? string.Empty) : string.Empty,
-                    Token = sig.TryGetProperty("token", out var tk) ? (tk.GetString() ?? string.Empty) : string.Empty,
-                    Signature = sig.TryGetProperty("signature", out var s) ? (s.GetString() ?? string.Empty) : string.Empty,
+                    Timestamp = TryReadStringProperty(sig, "timestamp", out var t) ? t : string.Empty,
+                    Token = TryReadStringProperty(sig, "token", out var tk) ? tk : string.Empty,
+                    Signature = TryReadStringProperty(sig, "signature", out var s) ? s : string.Empty,
                 };
             }
         }

@@ -44,4 +44,21 @@ public class MultipartBuilderTests
         Assert.Contains("ORIGINAL", body, StringComparison.Ordinal);
         Assert.DoesNotContain("XXXXXXXX", body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AddFile_Stream_does_not_take_ownership_of_callers_stream()
+    {
+        // Regression for the silent-ownership-transfer bug: the SDK already copies the bytes into a
+        // private byte[], so it must NOT also dispose the caller's stream when the builder is
+        // disposed. Callers commonly want to rewind/reuse/retry the stream after the SDK call.
+        var ms = new MemoryStream(Encoding.ASCII.GetBytes("address\nx@example.com\n"));
+        var mp = new MultipartBuilder();
+        mp.AddFile("file", "list.csv", ms, "text/csv");
+        mp.Dispose();
+
+        // If Dispose stole the caller's stream, Position would throw ObjectDisposedException.
+        Assert.True(ms.CanRead, "Caller's stream must remain usable after MultipartBuilder.Dispose().");
+        _ = ms.Position;
+        ms.Dispose();
+    }
 }

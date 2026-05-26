@@ -229,8 +229,13 @@ internal sealed class AllowlistsService : IAllowlistsService
     public Task CreateAsync(string domain, string? address = null, string? domainValue = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        if (string.IsNullOrWhiteSpace(address) && string.IsNullOrWhiteSpace(domainValue))
-            throw new ArgumentException("Either address or domainValue must be supplied.");
+        // Mailgun's whitelist entry is either an address entry or a domain entry — never both.
+        // Sending both fields produces an ambiguous request on the wire; the interface doc has
+        // always said "not both" but the previous implementation only rejected the neither case.
+        var hasAddress = !string.IsNullOrWhiteSpace(address);
+        var hasDomain = !string.IsNullOrWhiteSpace(domainValue);
+        if (hasAddress == hasDomain)
+            throw new ArgumentException("Supply exactly one of address or domainValue.");
         var fb = new FormBuilder();
         fb.Add("address", address);
         fb.Add("domain", domainValue);

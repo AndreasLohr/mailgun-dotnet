@@ -202,9 +202,55 @@ internal sealed class MailgunHttpClient : IDisposable
 
     private async Task<TResponse> GetJsonByAbsoluteUrlAsync<TResponse>(string absoluteUrl, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, absoluteUrl);
+        var safeUri = ValidatePaginationUrl(absoluteUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Get, safeUri);
         var raw = await SendCoreAsync(request, ct).ConfigureAwait(false);
         return Deserialize<TResponse>(raw);
+    }
+
+    /// <summary>
+    /// Mailgun-region hosts an absolute pagination URL is allowed to point at. The SDK refuses to
+    /// follow <c>paging.next</c> links to anything else, because <see cref="SendCoreAsync"/>
+    /// unconditionally attaches the API key in Basic auth — a compromised upstream, replayed
+    /// fixture, or accidentally-rewritten proxy response could otherwise turn auto-pagination
+    /// into credential exfiltration.
+    /// </summary>
+    private static readonly string[] AllowedMailgunHosts =
+    {
+        "api.mailgun.net",
+        "api.eu.mailgun.net",
+    };
+
+    /// <summary>
+    /// Validates a server-supplied pagination URL: must be HTTPS, must be a host the SDK considers
+    /// a Mailgun region (the configured base host OR a known Mailgun region host). The auth-bearing
+    /// SDK must not be talked into following arbitrary absolute URLs from response data.
+    /// </summary>
+    private Uri ValidatePaginationUrl(string absoluteUrl)
+    {
+        if (!Uri.TryCreate(absoluteUrl, UriKind.Absolute, out var uri))
+            throw new MailgunSerializationException(
+                $"Mailgun pagination link is not a valid absolute URL: '{absoluteUrl}'.");
+
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
+            throw new MailgunSerializationException(
+                $"Mailgun pagination link must be HTTPS; refusing to follow '{uri.Scheme}://{uri.Host}'.");
+
+        var matchesBase = string.Equals(uri.Host, _baseUrl.Host, StringComparison.OrdinalIgnoreCase);
+        var matchesRegion = false;
+        foreach (var allowed in AllowedMailgunHosts)
+        {
+            if (string.Equals(uri.Host, allowed, StringComparison.OrdinalIgnoreCase))
+            {
+                matchesRegion = true;
+                break;
+            }
+        }
+        if (!matchesBase && !matchesRegion)
+            throw new MailgunSerializationException(
+                $"Refusing to follow off-origin Mailgun pagination link to host '{uri.Host}'.");
+
+        return uri;
     }
 
     private async Task<TResponse> SendJsonAsync<TResponse>(
