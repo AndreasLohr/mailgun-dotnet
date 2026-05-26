@@ -59,63 +59,63 @@ internal sealed class AlertsService : IAlertsService
     public AlertsService(MailgunHttpClient http) => _http = http;
 
     public Task<AlertSettings> GetSettingsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<AlertSettings>("v1/alerts/settings", null, cancellationToken);
+        _http.GetJsonAsync<AlertSettings>("v1/alerts/settings", null, cancellationToken, routeTemplate: "v1/alerts/settings");
 
     public Task<AlertSettings> UpdateSettingsAsync(AlertSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return _http.PutJsonBodyAsync<AlertSettings>("v1/alerts/settings", settings, cancellationToken);
+        return _http.PutJsonBodyAsync<AlertSettings>("v1/alerts/settings", settings, cancellationToken, routeTemplate: "v1/alerts/settings");
     }
 
     public Task<AlertEventList> ListEventsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<AlertEventList>("v1/alerts/events", null, cancellationToken);
+        _http.GetJsonAsync<AlertEventList>("v1/alerts/events", null, cancellationToken, routeTemplate: "v1/alerts/events");
 
     public Task<AlertSlackChannelList> ListSlackChannelsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<AlertSlackChannelList>("v1/alerts/slack/channels", null, cancellationToken);
+        _http.GetJsonAsync<AlertSlackChannelList>("v1/alerts/slack/channels", null, cancellationToken, routeTemplate: "v1/alerts/slack/channels");
 
     public Task<AlertEmailList> ListEmailsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<AlertEmailList>("v1/alerts/email/recipients", null, cancellationToken);
+        _http.GetJsonAsync<AlertEmailList>("v1/alerts/email/recipients", null, cancellationToken, routeTemplate: "v1/alerts/email/recipients");
 
     public Task<AlertWebhookList> ListWebhooksAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<AlertWebhookList>("v1/alerts/webhook/urls", null, cancellationToken);
+        _http.GetJsonAsync<AlertWebhookList>("v1/alerts/webhook/urls", null, cancellationToken, routeTemplate: "v1/alerts/webhook/urls");
 
     public Task AddEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         var fb = new FormBuilder().Add("email", email);
-        return _http.PostFormNoResponseAsync("v1/alerts/email/recipients", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync("v1/alerts/email/recipients", fb, cancellationToken, routeTemplate: "v1/alerts/email/recipients");
     }
 
     public Task RemoveEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
-        return _http.DeleteNoResponseAsync($"v1/alerts/email/recipients/{PathEscape.Segment(email)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v1/alerts/email/recipients/{PathEscape.Segment(email)}", cancellationToken, routeTemplate: "v1/alerts/email/recipients/{email}");
     }
 
     public Task AddSlackChannelAsync(string webhookUrl, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(webhookUrl);
         var fb = new FormBuilder().Add("url", webhookUrl);
-        return _http.PostFormNoResponseAsync("v1/alerts/slack/channels", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync("v1/alerts/slack/channels", fb, cancellationToken, routeTemplate: "v1/alerts/slack/channels");
     }
 
     public Task RemoveSlackChannelAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _http.DeleteNoResponseAsync($"v1/alerts/slack/channels/{PathEscape.Segment(id)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v1/alerts/slack/channels/{PathEscape.Segment(id)}", cancellationToken, routeTemplate: "v1/alerts/slack/channels/{id}");
     }
 
     public Task AddWebhookAsync(string url, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
         var fb = new FormBuilder().Add("url", url);
-        return _http.PostFormNoResponseAsync("v1/alerts/webhook/urls", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync("v1/alerts/webhook/urls", fb, cancellationToken, routeTemplate: "v1/alerts/webhook/urls");
     }
 
     public Task RemoveWebhookAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _http.DeleteNoResponseAsync($"v1/alerts/webhook/urls/{PathEscape.Segment(id)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v1/alerts/webhook/urls/{PathEscape.Segment(id)}", cancellationToken, routeTemplate: "v1/alerts/webhook/urls/{id}");
     }
 
     public Task SubscribeEventAsync(string eventType, string channel, CancellationToken cancellationToken = default)
@@ -123,7 +123,7 @@ internal sealed class AlertsService : IAlertsService
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         ArgumentException.ThrowIfNullOrWhiteSpace(channel);
         var fb = new FormBuilder().Add("event", eventType).Add("channel", channel);
-        return _http.PostFormNoResponseAsync("v1/alerts/events/subscribe", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync("v1/alerts/events/subscribe", fb, cancellationToken, routeTemplate: "v1/alerts/events/subscribe");
     }
 
     public Task UnsubscribeEventAsync(string eventType, string channel, CancellationToken cancellationToken = default)
@@ -131,6 +131,6 @@ internal sealed class AlertsService : IAlertsService
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         ArgumentException.ThrowIfNullOrWhiteSpace(channel);
         var fb = new FormBuilder().Add("event", eventType).Add("channel", channel);
-        return _http.PostFormNoResponseAsync("v1/alerts/events/unsubscribe", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync("v1/alerts/events/unsubscribe", fb, cancellationToken, routeTemplate: "v1/alerts/events/unsubscribe");
     }
 }

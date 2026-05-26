@@ -40,7 +40,7 @@ internal sealed class DkimSecurityService : IDkimSecurityService
         // POST with no body — Mailgun's documented contract for this endpoint.
         return _http.PostFormNoResponseAsync(
             $"v1/dkim_management/domains/{PathEscape.Segment(domain)}/rotate",
-            new FormBuilder(), cancellationToken);
+            new FormBuilder(), cancellationToken, routeTemplate: "v1/dkim_management/domains/{domain}/rotate");
     }
 
     public async Task SetAutoRotationAsync(string domain, bool rotationEnabled, string? rotationInterval = null, CancellationToken cancellationToken = default)
@@ -54,6 +54,6 @@ internal sealed class DkimSecurityService : IDkimSecurityService
             .AddText("rotation_enabled", rotationEnabled ? "true" : "false")
             .AddText("rotation_interval", rotationInterval);
         await _http.PutMultipartNoResponseAsync(
-            $"v1/dkim_management/domains/{PathEscape.Segment(domain)}/rotation", mp, cancellationToken).ConfigureAwait(false);
+            $"v1/dkim_management/domains/{PathEscape.Segment(domain)}/rotation", mp, cancellationToken, routeTemplate: "v1/dkim_management/domains/{domain}/rotation").ConfigureAwait(false);
     }
 }

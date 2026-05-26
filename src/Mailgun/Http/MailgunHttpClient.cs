@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -91,69 +92,69 @@ internal sealed class MailgunHttpClient : IDisposable
     /// </summary>
     public MailgunResponseMetadata? LastResponseMetadata { get; private set; }
 
-    public Task<TResponse> GetJsonAsync<TResponse>(string path, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Get, path, query, content: null, ct);
+    public Task<TResponse> GetJsonAsync<TResponse>(string path, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Get, path, query, content: null, ct, routeTemplate);
 
-    public Task<TResponse> PostFormAsync<TResponse>(string path, FormBuilder form, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: form.ToContent(), ct);
+    public Task<TResponse> PostFormAsync<TResponse>(string path, FormBuilder form, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: form.ToContent(), ct, routeTemplate);
 
-    public Task PostFormNoResponseAsync(string path, FormBuilder form, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: form.ToContent(), ct);
+    public Task PostFormNoResponseAsync(string path, FormBuilder form, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: form.ToContent(), ct, routeTemplate);
 
-    public Task<TResponse> PutFormAsync<TResponse>(string path, FormBuilder form, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: form.ToContent(), ct);
+    public Task<TResponse> PutFormAsync<TResponse>(string path, FormBuilder form, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: form.ToContent(), ct, routeTemplate);
 
-    public Task PutFormNoResponseAsync(string path, FormBuilder form, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: form.ToContent(), ct);
+    public Task PutFormNoResponseAsync(string path, FormBuilder form, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: form.ToContent(), ct, routeTemplate);
 
-    public Task<TResponse> PostMultipartAsync<TResponse>(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: mp.Build(), ct);
+    public Task<TResponse> PostMultipartAsync<TResponse>(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: mp.Build(), ct, routeTemplate);
 
-    public Task PostMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: mp.Build(), ct);
+    public Task PostMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: mp.Build(), ct, routeTemplate);
 
-    public Task<TResponse> PutMultipartAsync<TResponse>(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: mp.Build(), ct);
+    public Task<TResponse> PutMultipartAsync<TResponse>(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: mp.Build(), ct, routeTemplate);
 
-    public Task PutMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: mp.Build(), ct);
+    public Task PutMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: mp.Build(), ct, routeTemplate);
 
     /// <summary>PATCH with a multipart body — used by IP-pool editing per Mailgun's documented contract.</summary>
-    public Task PatchMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Patch, path, query: null, content: mp.Build(), ct);
+    public Task PatchMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Patch, path, query: null, content: mp.Build(), ct, routeTemplate);
 
     /// <summary>DELETE with a multipart body — used by IP-pool delegation revoke (subaccount in the body, not the path).</summary>
-    public Task DeleteMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: mp.Build(), ct);
+    public Task DeleteMultipartNoResponseAsync(string path, MultipartBuilder mp, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: mp.Build(), ct, routeTemplate);
 
-    public Task<TResponse> PostJsonBodyAsync<TResponse>(string path, object body, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: BuildJsonContent(body), ct);
+    public Task<TResponse> PostJsonBodyAsync<TResponse>(string path, object body, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Post, path, query: null, content: BuildJsonContent(body), ct, routeTemplate);
 
-    public Task PostJsonBodyNoResponseAsync(string path, object body, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: BuildJsonContent(body), ct);
+    public Task PostJsonBodyNoResponseAsync(string path, object body, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Post, path, query: null, content: BuildJsonContent(body), ct, routeTemplate);
 
-    public Task<TResponse> PutJsonBodyAsync<TResponse>(string path, object body, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: BuildJsonContent(body), ct);
+    public Task<TResponse> PutJsonBodyAsync<TResponse>(string path, object body, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Put, path, query: null, content: BuildJsonContent(body), ct, routeTemplate);
 
-    public Task PutJsonBodyNoResponseAsync(string path, object body, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: BuildJsonContent(body), ct);
+    public Task PutJsonBodyNoResponseAsync(string path, object body, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Put, path, query: null, content: BuildJsonContent(body), ct, routeTemplate);
 
-    public Task<TResponse> DeleteJsonAsync<TResponse>(string path, CancellationToken ct) =>
-        SendJsonAsync<TResponse>(HttpMethod.Delete, path, query: null, content: null, ct);
+    public Task<TResponse> DeleteJsonAsync<TResponse>(string path, CancellationToken ct, string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Delete, path, query: null, content: null, ct, routeTemplate);
 
-    public Task DeleteNoResponseAsync(string path, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: null, ct);
+    public Task DeleteNoResponseAsync(string path, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: null, ct, routeTemplate);
 
     /// <summary>DELETE with query-string parameters and no response body.</summary>
-    public Task DeleteNoResponseAsync(string path, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Delete, path, query, content: null, ct);
+    public Task DeleteNoResponseAsync(string path, IReadOnlyList<KeyValuePair<string, string?>>? query, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query, content: null, ct, routeTemplate);
 
     /// <summary>
     /// DELETE with a JSON request body — Mailgun uses this shape for endpoints like
     /// <c>DELETE /v1/analytics/tags</c> where the entity to delete is supplied in the body.
     /// </summary>
-    public Task DeleteJsonBodyNoResponseAsync(string path, object body, CancellationToken ct) =>
-        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: BuildJsonContent(body), ct);
+    public Task DeleteJsonBodyNoResponseAsync(string path, object body, CancellationToken ct, string routeTemplate = "") =>
+        SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: BuildJsonContent(body), ct, routeTemplate);
 
     /// <summary>
     /// Fetches a page from a Mailgun URL-pagination endpoint. <paramref name="absoluteUrlOrNull"/>
@@ -167,12 +168,13 @@ internal sealed class MailgunHttpClient : IDisposable
         Func<TEnvelope, IReadOnlyList<T>?> itemsSelector,
         Func<TEnvelope, PagingLinks?> pagingSelector,
         Func<TEnvelope, long?>? totalCountSelector,
-        CancellationToken ct)
+        CancellationToken ct,
+        string routeTemplate = "")
         where TEnvelope : class
     {
         var envelope = absoluteUrlOrNull is null
-            ? await GetJsonAsync<TEnvelope>(path, query, ct).ConfigureAwait(false)
-            : await GetJsonByAbsoluteUrlAsync<TEnvelope>(absoluteUrlOrNull, ct).ConfigureAwait(false);
+            ? await GetJsonAsync<TEnvelope>(path, query, ct, routeTemplate).ConfigureAwait(false)
+            : await GetJsonByAbsoluteUrlAsync<TEnvelope>(absoluteUrlOrNull, ct, routeTemplate).ConfigureAwait(false);
 
         var items = itemsSelector(envelope) ?? (IReadOnlyList<T>)Array.Empty<T>();
         var links = pagingSelector(envelope);
@@ -192,19 +194,23 @@ internal sealed class MailgunHttpClient : IDisposable
         IReadOnlyList<KeyValuePair<string, string?>>? firstPageQuery,
         Func<TEnvelope, IReadOnlyList<T>?> itemsSelector,
         Func<TEnvelope, PagingLinks?> pagingSelector,
-        Func<TEnvelope, long?>? totalCountSelector = null)
+        Func<TEnvelope, long?>? totalCountSelector = null,
+        string routeTemplate = "")
         where TEnvelope : class
     {
+        // Capture routeTemplate in the closure so every page (first + follow-ups via absolute URL)
+        // emits the same `http.route` metric tag.
+        var capturedTemplate = routeTemplate;
         return new AsyncPageable<T>((nextUrl, ct) =>
             GetSkipLimitPageAsync(path, nextUrl is null ? firstPageQuery : null, nextUrl,
-                itemsSelector, pagingSelector, totalCountSelector, ct));
+                itemsSelector, pagingSelector, totalCountSelector, ct, capturedTemplate));
     }
 
-    private async Task<TResponse> GetJsonByAbsoluteUrlAsync<TResponse>(string absoluteUrl, CancellationToken ct)
+    private async Task<TResponse> GetJsonByAbsoluteUrlAsync<TResponse>(string absoluteUrl, CancellationToken ct, string routeTemplate = "")
     {
         var safeUri = ValidatePaginationUrl(absoluteUrl);
         using var request = new HttpRequestMessage(HttpMethod.Get, safeUri);
-        var raw = await SendCoreAsync(request, ct).ConfigureAwait(false);
+        var raw = await SendCoreAsync(request, ct, routeTemplate).ConfigureAwait(false);
         return Deserialize<TResponse>(raw);
     }
 
@@ -258,9 +264,10 @@ internal sealed class MailgunHttpClient : IDisposable
         string path,
         IReadOnlyList<KeyValuePair<string, string?>>? query,
         HttpContent? content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string routeTemplate = "")
     {
-        var raw = await SendStringAsync(method, path, query, content, cancellationToken).ConfigureAwait(false);
+        var raw = await SendStringAsync(method, path, query, content, cancellationToken, routeTemplate).ConfigureAwait(false);
         return Deserialize<TResponse>(raw);
     }
 
@@ -269,9 +276,10 @@ internal sealed class MailgunHttpClient : IDisposable
         string path,
         IReadOnlyList<KeyValuePair<string, string?>>? query,
         HttpContent? content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string routeTemplate = "")
     {
-        _ = await SendStringAsync(method, path, query, content, cancellationToken).ConfigureAwait(false);
+        _ = await SendStringAsync(method, path, query, content, cancellationToken, routeTemplate).ConfigureAwait(false);
     }
 
     private async Task<string> SendStringAsync(
@@ -279,16 +287,17 @@ internal sealed class MailgunHttpClient : IDisposable
         string path,
         IReadOnlyList<KeyValuePair<string, string?>>? query,
         HttpContent? content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string routeTemplate = "")
     {
         var uri = BuildUri(path, query);
         using var request = new HttpRequestMessage(method, uri);
         if (content is not null)
             request.Content = content;
-        return await SendCoreAsync(request, cancellationToken).ConfigureAwait(false);
+        return await SendCoreAsync(request, cancellationToken, routeTemplate).ConfigureAwait(false);
     }
 
-    private async Task<string> SendCoreAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    private async Task<string> SendCoreAsync(HttpRequestMessage request, CancellationToken cancellationToken, string routeTemplate = "")
     {
         // Auth is injected per-request rather than via a DelegatingHandler so that callers who supply
         // their own HttpClient (e.g. through IHttpClientFactory + AddMailgun) still authenticate
@@ -305,66 +314,122 @@ internal sealed class MailgunHttpClient : IDisposable
             request.Headers.TryAddWithoutValidation("X-Mailgun-On-Behalf-Of", _onBehalfOf);
         }
 
-        using var activity = MailgunActivitySource.Instance.StartActivity(
-            $"mailgun {request.Method.Method}",
-            System.Diagnostics.ActivityKind.Client);
-        activity?.SetTag("http.request.method", request.Method.Method);
-        activity?.SetTag("url.full", request.RequestUri?.ToString());
-        activity?.SetTag("server.address", request.RequestUri?.Host);
+        // Stamp the route template on the request so RateLimitHandler can read it back when emitting
+        // the retries counter — there's no direct channel through the DelegatingHandler boundary.
+        request.Options.Set(MailgunMeter.RouteTemplateKey, routeTemplate);
+
+        // Pre-compute tag values we'll need on both success and exception paths. Using TagList
+        // (stack-allocated struct) instead of KeyValuePair[] keeps the metric hot-path alloc-free.
+        var methodName = request.Method.Method;
+        var hostName = request.RequestUri?.Host ?? string.Empty;
+        var activeTags = new TagList
+        {
+            { "http.request.method", methodName },
+            { "server.address", hostName },
+        };
+        MailgunMeter.ActiveRequests.Add(1, activeTags);
+        var startTimestamp = Stopwatch.GetTimestamp();
+        int? statusCode = null;
 
         try
         {
-            using var response = await _httpClient
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false);
+            using var activity = MailgunActivitySource.Instance.StartActivity(
+                $"mailgun {request.Method.Method}",
+                System.Diagnostics.ActivityKind.Client);
+            activity?.SetTag("http.request.method", request.Method.Method);
+            activity?.SetTag("url.full", request.RequestUri?.ToString());
+            activity?.SetTag("server.address", request.RequestUri?.Host);
 
-            var metadata = MailgunResponseMetadata.FromHttpResponse(response);
-            LastResponseMetadata = metadata;
-
-            activity?.SetTag("http.response.status_code", (int)response.StatusCode);
-            if (metadata.RequestId is { } reqId)
-                activity?.SetTag("mailgun.request_id", reqId);
-            if (metadata.RateLimitRemaining is { } remaining)
-                activity?.SetTag("mailgun.rate_limit.remaining", remaining);
-
-            // Invoke the per-response callback exactly once per request, regardless of success
-            // status. Concurrent-safe (the SDK doesn't store metadata via this callback — it's the
-            // caller's responsibility to route it into their own storage). Wrapped so a thrown
-            // callback can't break the request, but the exception is surfaced to Trace + the active
-            // Activity so a misbehaving callback (e.g. one whose logger throws) is diagnosable.
-            if (_onResponse is { } onResponse)
+            try
             {
-                try { onResponse(metadata); }
-                catch (Exception cbEx)
+                using var response = await _httpClient
+                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                    .ConfigureAwait(false);
+
+                // Assign status BEFORE any throw so the duration histogram's dimension count stays
+                // stable across success / non-2xx paths (OTel collectors warn on dimension drift).
+                statusCode = (int)response.StatusCode;
+
+                var metadata = MailgunResponseMetadata.FromHttpResponse(response);
+                LastResponseMetadata = metadata;
+
+                activity?.SetTag("http.response.status_code", statusCode);
+                if (metadata.RequestId is { } reqId)
+                    activity?.SetTag("mailgun.request_id", reqId);
+                if (metadata.RateLimitRemaining is { } remaining)
+                    activity?.SetTag("mailgun.rate_limit.remaining", remaining);
+
+                // Invoke the per-response callback exactly once per request, regardless of success
+                // status. Concurrent-safe (the SDK doesn't store metadata via this callback — it's the
+                // caller's responsibility to route it into their own storage). Wrapped so a thrown
+                // callback can't break the request, but the exception is surfaced to Trace + the active
+                // Activity so a misbehaving callback (e.g. one whose logger throws) is diagnosable.
+                if (_onResponse is { } onResponse)
                 {
-                    System.Diagnostics.Trace.TraceWarning(
-                        "Mailgun OnResponse callback threw {0}: {1}", cbEx.GetType().FullName, cbEx.Message);
-                    activity?.AddEvent(new System.Diagnostics.ActivityEvent("mailgun.on_response.exception",
-                        tags: new System.Diagnostics.ActivityTagsCollection
-                        {
-                            ["exception.type"] = cbEx.GetType().FullName,
-                            ["exception.message"] = cbEx.Message,
-                        }));
+                    try { onResponse(metadata); }
+                    catch (Exception cbEx)
+                    {
+                        System.Diagnostics.Trace.TraceWarning(
+                            "Mailgun OnResponse callback threw {0}: {1}", cbEx.GetType().FullName, cbEx.Message);
+                        activity?.AddEvent(new System.Diagnostics.ActivityEvent("mailgun.on_response.exception",
+                            tags: new System.Diagnostics.ActivityTagsCollection
+                            {
+                                ["exception.type"] = cbEx.GetType().FullName,
+                                ["exception.message"] = cbEx.Message,
+                            }));
+                    }
                 }
+
+                var raw = response.Content is null
+                    ? string.Empty
+                    : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, $"HTTP {(int)response.StatusCode}");
+                    throw BuildException(response, raw, metadata);
+                }
+                return raw;
             }
-
-            var raw = response.Content is null
-                ? string.Empty
-                : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
+            catch (Exception ex) when (activity is not null)
             {
-                activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, $"HTTP {(int)response.StatusCode}");
-                throw BuildException(response, raw, metadata);
+                activity.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.GetType().Name);
+                activity.AddTag("exception.type", ex.GetType().FullName);
+                activity.AddTag("exception.message", ex.Message);
+                throw;
             }
-            return raw;
         }
-        catch (Exception ex) when (activity is not null)
+        catch (Exception ex)
         {
-            activity.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.GetType().Name);
-            activity.AddTag("exception.type", ex.GetType().FullName);
-            activity.AddTag("exception.message", ex.Message);
+            // The outer catch fires whether or not Activity sampling started one. The errors counter
+            // captures BOTH transport-layer failures (HttpRequestException, TaskCanceledException)
+            // AND 4xx/5xx mapped to MailgunException via BuildException above.
+            var errorTags = new TagList
+            {
+                { "http.request.method", methodName },
+                { "http.route", routeTemplate },
+                { "error.type", ex.GetType().FullName ?? ex.GetType().Name },
+                { "server.address", hostName },
+            };
+            MailgunMeter.RequestErrors.Add(1, errorTags);
             throw;
+        }
+        finally
+        {
+            // Increment/decrement must balance even when TagList construction in the catch would
+            // throw. Decrement first, then record duration — order matters because Stopwatch is the
+            // last thing we want to measure.
+            MailgunMeter.ActiveRequests.Add(-1, activeTags);
+            var elapsedSeconds = Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds;
+            var durationTags = new TagList
+            {
+                { "http.request.method", methodName },
+                { "http.route", routeTemplate },
+                { "server.address", hostName },
+            };
+            if (statusCode is { } sc)
+                durationTags.Add("http.response.status_code", sc);
+            MailgunMeter.RequestDuration.Record(elapsedSeconds, durationTags);
         }
     }
 

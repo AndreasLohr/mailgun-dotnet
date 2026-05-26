@@ -82,19 +82,22 @@ internal sealed class SendAlertsService : ISendAlertsService
     private const string BasePath = "v1/thresholds/alerts/send";
 
     public Task<SendAlertRuleList> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<SendAlertRuleList>(BasePath, null, cancellationToken);
+        _http.GetJsonAsync<SendAlertRuleList>(BasePath, null, cancellationToken,
+            routeTemplate: "v1/thresholds/alerts/send");
 
     public Task<SendAlertRule> GetAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.GetJsonAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken);
+        return _http.GetJsonAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken,
+            routeTemplate: "v1/thresholds/alerts/send/{name}");
     }
 
     public Task<SendAlertRule> CreateAsync(SendAlertRule rule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(rule);
         ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
-        return _http.PostJsonBodyAsync<SendAlertRule>(BasePath, rule, cancellationToken);
+        return _http.PostJsonBodyAsync<SendAlertRule>(BasePath, rule, cancellationToken,
+            routeTemplate: "v1/thresholds/alerts/send");
     }
 
     public Task<SendAlertRule> UpdateAsync(string name, SendAlertRule rule, CancellationToken cancellationToken = default)
@@ -102,13 +105,15 @@ internal sealed class SendAlertsService : ISendAlertsService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(rule);
         ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
-        return _http.PutJsonBodyAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken);
+        return _http.PutJsonBodyAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken,
+            routeTemplate: "v1/thresholds/alerts/send/{name}");
     }
 
     public Task DeleteAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken,
+            routeTemplate: "v1/thresholds/alerts/send/{name}");
     }
 
     private static void ValidateRequired(string name, string metric, string comparator, string limit, string dimension)
@@ -191,19 +196,22 @@ internal sealed class LimitsService : ILimitsService
     private const string BasePath = "v1/thresholds/limits";
 
     public Task<LimitRuleList> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<LimitRuleList>(BasePath, null, cancellationToken);
+        _http.GetJsonAsync<LimitRuleList>(BasePath, null, cancellationToken,
+            routeTemplate: "v1/thresholds/limits");
 
     public Task<LimitRule> GetAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.GetJsonAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken);
+        return _http.GetJsonAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken,
+            routeTemplate: "v1/thresholds/limits/{name}");
     }
 
     public Task<LimitRule> CreateAsync(LimitRule rule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(rule);
         ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
-        return _http.PostJsonBodyAsync<LimitRule>(BasePath, rule, cancellationToken);
+        return _http.PostJsonBodyAsync<LimitRule>(BasePath, rule, cancellationToken,
+            routeTemplate: "v1/thresholds/limits");
     }
 
     public Task<LimitRule> UpdateAsync(string name, LimitRule rule, CancellationToken cancellationToken = default)
@@ -211,13 +219,15 @@ internal sealed class LimitsService : ILimitsService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(rule);
         ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
-        return _http.PutJsonBodyAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken);
+        return _http.PutJsonBodyAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken,
+            routeTemplate: "v1/thresholds/limits/{name}");
     }
 
     public Task DeleteAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken,
+            routeTemplate: "v1/thresholds/limits/{name}");
     }
 
     private static void ValidateRequired(string name, string metric, string comparator, string limit, string dimension)

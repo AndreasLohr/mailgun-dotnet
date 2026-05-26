@@ -81,13 +81,13 @@ internal sealed class SubaccountsService : ISubaccountsService
     public Task<SubaccountListResponse> ListAsync(int? limit = null, int? skip = null, string? filter = null, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Add("filter", filter).Build();
-        return _http.GetJsonAsync<SubaccountListResponse>("v5/accounts/subaccounts", q, cancellationToken);
+        return _http.GetJsonAsync<SubaccountListResponse>("v5/accounts/subaccounts", q, cancellationToken, routeTemplate: "v5/accounts/subaccounts");
     }
 
     public Task<Subaccount> GetAsync(string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.GetJsonAsync<Subaccount>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}", null, cancellationToken);
+        return _http.GetJsonAsync<Subaccount>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}", null, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}");
     }
 
     public Task<Subaccount> CreateAsync(string name, CancellationToken cancellationToken = default)
@@ -100,7 +100,7 @@ internal sealed class SubaccountsService : ISubaccountsService
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
-        return _http.PostJsonBodyAsync<Subaccount>("v5/accounts/subaccounts", request, cancellationToken);
+        return _http.PostJsonBodyAsync<Subaccount>("v5/accounts/subaccounts", request, cancellationToken, routeTemplate: "v5/accounts/subaccounts");
     }
 
     public Task<Subaccount> UpdateAsync(string subaccountId, string name, CancellationToken cancellationToken = default)
@@ -115,44 +115,44 @@ internal sealed class SubaccountsService : ISubaccountsService
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
-        return _http.PutJsonBodyAsync<Subaccount>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}", request, cancellationToken);
+        return _http.PutJsonBodyAsync<Subaccount>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}", request, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}");
     }
 
     public Task EnableAsync(string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.PostJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/enable", new { }, cancellationToken);
+        return _http.PostJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/enable", new { }, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/enable");
     }
 
     public Task DisableAsync(string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.PostJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/disable", new { }, cancellationToken);
+        return _http.PostJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/disable", new { }, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/disable");
     }
 
     public Task<SubaccountFeatures> GetFeaturesAsync(string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.GetJsonAsync<SubaccountFeatures>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/features", null, cancellationToken);
+        return _http.GetJsonAsync<SubaccountFeatures>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/features", null, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/features");
     }
 
     public Task<SubaccountFeatures> UpdateFeaturesAsync(string subaccountId, SubaccountFeatures features, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
         ArgumentNullException.ThrowIfNull(features);
-        return _http.PutJsonBodyAsync<SubaccountFeatures>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/features", features, cancellationToken);
+        return _http.PutJsonBodyAsync<SubaccountFeatures>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/features", features, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/features");
     }
 
     public Task<CustomLimit> GetMonthlyCustomLimitAsync(string subaccountId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.GetJsonAsync<CustomLimit>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", null, cancellationToken);
+        return _http.GetJsonAsync<CustomLimit>($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", null, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/limit/custom/monthly");
     }
 
     public Task SetMonthlyCustomLimitAsync(string subaccountId, long limit, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
-        return _http.PutJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", new { limit }, cancellationToken);
+        return _http.PutJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", new { limit }, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/limit/custom/monthly");
     }
 }
 
@@ -179,16 +179,16 @@ internal sealed class CustomMessageLimitService : ICustomMessageLimitService
     public CustomMessageLimitService(MailgunHttpClient http) => _http = http;
 
     public Task<CustomLimit> GetAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<CustomLimit>("v5/accounts/limit/custom/monthly", null, cancellationToken);
+        _http.GetJsonAsync<CustomLimit>("v5/accounts/limit/custom/monthly", null, cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly");
 
     public Task SetAsync(long limit, CancellationToken cancellationToken = default) =>
-        _http.PutJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly", new { limit }, cancellationToken);
+        _http.PutJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly", new { limit }, cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly");
 
     public Task EnableAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly/enable", new { }, cancellationToken);
+        _http.PostJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly/enable", new { }, cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly/enable");
 
     public Task DisableAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly/disable", new { }, cancellationToken);
+        _http.PostJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly/disable", new { }, cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly/disable");
 }
 
 /// <summary>Operations on <c>/v5/accounts</c>.</summary>
@@ -250,34 +250,34 @@ internal sealed class AccountService : IAccountService
     public Task<Account> UpdateAsync(Account updates, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(updates);
-        return _http.PutJsonBodyAsync<Account>("v5/accounts", updates, cancellationToken);
+        return _http.PutJsonBodyAsync<Account>("v5/accounts", updates, cancellationToken, routeTemplate: "v5/accounts");
     }
 
     public Task<HttpSigningKey> GetHttpSigningKeyAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<HttpSigningKey>("v5/accounts/http_signing_key", null, cancellationToken);
+        _http.GetJsonAsync<HttpSigningKey>("v5/accounts/http_signing_key", null, cancellationToken, routeTemplate: "v5/accounts/http_signing_key");
 
     public Task<HttpSigningKey> RotateHttpSigningKeyAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyAsync<HttpSigningKey>("v5/accounts/http_signing_key", new { }, cancellationToken);
+        _http.PostJsonBodyAsync<HttpSigningKey>("v5/accounts/http_signing_key", new { }, cancellationToken, routeTemplate: "v5/accounts/http_signing_key");
 
     public Task<Dictionary<string, bool>> GetFeaturesAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<Dictionary<string, bool>>("v5/accounts/features", null, cancellationToken);
+        _http.GetJsonAsync<Dictionary<string, bool>>("v5/accounts/features", null, cancellationToken, routeTemplate: "v5/accounts/features");
 
     public Task ResendActivationEmailAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyNoResponseAsync("v5/accounts/resend_activation_email", new { }, cancellationToken);
+        _http.PostJsonBodyNoResponseAsync("v5/accounts/resend_activation_email", new { }, cancellationToken, routeTemplate: "v5/accounts/resend_activation_email");
 
     public Task<SandboxAuthRecipientsList> ListSandboxAuthRecipientsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<SandboxAuthRecipientsList>("v5/sandbox/auth_recipients", null, cancellationToken);
+        _http.GetJsonAsync<SandboxAuthRecipientsList>("v5/sandbox/auth_recipients", null, cancellationToken, routeTemplate: "v5/sandbox/auth_recipients");
 
     public Task AddSandboxAuthRecipientAsync(string email, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
-        return _http.PostJsonBodyNoResponseAsync("v5/sandbox/auth_recipients", new { email }, cancellationToken);
+        return _http.PostJsonBodyNoResponseAsync("v5/sandbox/auth_recipients", new { email }, cancellationToken, routeTemplate: "v5/sandbox/auth_recipients");
     }
 
     public Task RemoveSandboxAuthRecipientAsync(string email, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
-        return _http.DeleteNoResponseAsync($"v5/sandbox/auth_recipients/{PathEscape.Segment(email)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v5/sandbox/auth_recipients/{PathEscape.Segment(email)}", cancellationToken, routeTemplate: "v5/sandbox/auth_recipients/{email}");
     }
 }
 
@@ -333,32 +333,32 @@ internal sealed class UsersService : IUsersService
     public Task<UserList> ListAsync(int? limit = null, int? skip = null, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Build();
-        return _http.GetJsonAsync<UserList>("v5/users", q, cancellationToken);
+        return _http.GetJsonAsync<UserList>("v5/users", q, cancellationToken, routeTemplate: "v5/users");
     }
 
     public Task<MailgunUser> GetAsync(string userId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
-        return _http.GetJsonAsync<MailgunUser>($"v5/users/{PathEscape.Segment(userId)}", null, cancellationToken);
+        return _http.GetJsonAsync<MailgunUser>($"v5/users/{PathEscape.Segment(userId)}", null, cancellationToken, routeTemplate: "v5/users/{user_id}");
     }
 
     public Task<MailgunUser> CreateAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Email);
-        return _http.PostJsonBodyAsync<MailgunUser>("v5/users", request, cancellationToken);
+        return _http.PostJsonBodyAsync<MailgunUser>("v5/users", request, cancellationToken, routeTemplate: "v5/users");
     }
 
     public Task<MailgunUser> UpdateAsync(string userId, UpdateUserRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
         ArgumentNullException.ThrowIfNull(request);
-        return _http.PutJsonBodyAsync<MailgunUser>($"v5/users/{PathEscape.Segment(userId)}", request, cancellationToken);
+        return _http.PutJsonBodyAsync<MailgunUser>($"v5/users/{PathEscape.Segment(userId)}", request, cancellationToken, routeTemplate: "v5/users/{user_id}");
     }
 
     public Task DeleteAsync(string userId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
-        return _http.DeleteNoResponseAsync($"v5/users/{PathEscape.Segment(userId)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v5/users/{PathEscape.Segment(userId)}", cancellationToken, routeTemplate: "v5/users/{user_id}");
     }
 }

@@ -163,71 +163,71 @@ internal sealed class InboxPlacementService : IInboxPlacementService
     public InboxPlacementService(MailgunHttpClient http) => _http = http;
 
     public Task<SeedlistListResponse> ListSeedlistsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<SeedlistListResponse>("v4/inbox/seedlists", null, cancellationToken);
+        _http.GetJsonAsync<SeedlistListResponse>("v4/inbox/seedlists", null, cancellationToken, routeTemplate: "v4/inbox/seedlists");
 
     public Task<Seedlist> GetSeedlistAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.GetJsonAsync<Seedlist>($"v4/inbox/seedlists/{PathEscape.Segment(name)}", null, cancellationToken);
+        return _http.GetJsonAsync<Seedlist>($"v4/inbox/seedlists/{PathEscape.Segment(name)}", null, cancellationToken, routeTemplate: "v4/inbox/seedlists/{name}");
     }
 
     public Task<Seedlist> CreateSeedlistAsync(CreateSeedlistRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
-        return _http.PostJsonBodyAsync<Seedlist>("v4/inbox/seedlists", request, cancellationToken);
+        return _http.PostJsonBodyAsync<Seedlist>("v4/inbox/seedlists", request, cancellationToken, routeTemplate: "v4/inbox/seedlists");
     }
 
     public Task<Seedlist> UpdateSeedlistAsync(string name, UpdateSeedlistRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(request);
-        return _http.PutJsonBodyAsync<Seedlist>($"v4/inbox/seedlists/{PathEscape.Segment(name)}", request, cancellationToken);
+        return _http.PutJsonBodyAsync<Seedlist>($"v4/inbox/seedlists/{PathEscape.Segment(name)}", request, cancellationToken, routeTemplate: "v4/inbox/seedlists/{name}");
     }
 
     public Task DeleteSeedlistAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.DeleteNoResponseAsync($"v4/inbox/seedlists/{PathEscape.Segment(name)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v4/inbox/seedlists/{PathEscape.Segment(name)}", cancellationToken, routeTemplate: "v4/inbox/seedlists/{name}");
     }
 
     public Task<InboxPlacementResultList> ListResultsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<InboxPlacementResultList>("v4/inbox/results", null, cancellationToken);
+        _http.GetJsonAsync<InboxPlacementResultList>("v4/inbox/results", null, cancellationToken, routeTemplate: "v4/inbox/results");
 
     public Task<InboxPlacementResult> GetResultAsync(string resultId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resultId);
-        return _http.GetJsonAsync<InboxPlacementResult>($"v4/inbox/results/{PathEscape.Segment(resultId)}", null, cancellationToken);
+        return _http.GetJsonAsync<InboxPlacementResult>($"v4/inbox/results/{PathEscape.Segment(resultId)}", null, cancellationToken, routeTemplate: "v4/inbox/results/{result_id}");
     }
 
     public Task<InboxPlacementResult> CreateTestAsync(CreateInboxPlacementTestRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Seedlist);
-        return _http.PostJsonBodyAsync<InboxPlacementResult>("v4/inbox/tests", request, cancellationToken);
+        return _http.PostJsonBodyAsync<InboxPlacementResult>("v4/inbox/tests", request, cancellationToken, routeTemplate: "v4/inbox/tests");
     }
 
     public Task<InboxPlacementProviderList> ListProvidersAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<InboxPlacementProviderList>("v4/inbox/providers", null, cancellationToken);
+        _http.GetJsonAsync<InboxPlacementProviderList>("v4/inbox/providers", null, cancellationToken, routeTemplate: "v4/inbox/providers");
 
     public Task DeleteResultAsync(string resultId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resultId);
-        return _http.DeleteNoResponseAsync($"v4/inbox/results/{PathEscape.Segment(resultId)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v4/inbox/results/{PathEscape.Segment(resultId)}", cancellationToken, routeTemplate: "v4/inbox/results/{result_id}");
     }
 
     public Task<InboxPlacementResultDetails> GetResultDetailsAsync(string resultId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resultId);
         return _http.GetJsonAsync<InboxPlacementResultDetails>(
-            $"v4/inbox/results/{PathEscape.Segment(resultId)}/details", null, cancellationToken);
+            $"v4/inbox/results/{PathEscape.Segment(resultId)}/details", null, cancellationToken, routeTemplate: "v4/inbox/results/{result_id}/details");
     }
 
     public Task<InboxPlacementCounters> GetResultCountersAsync(string resultId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resultId);
         return _http.GetJsonAsync<InboxPlacementCounters>(
-            $"v4/inbox/results/{PathEscape.Segment(resultId)}/counters", null, cancellationToken);
+            $"v4/inbox/results/{PathEscape.Segment(resultId)}/counters", null, cancellationToken, routeTemplate: "v4/inbox/results/{result_id}/counters");
     }
 
     public Task AddSeedAsync(string seedlistName, string email, CancellationToken cancellationToken = default)
@@ -237,7 +237,8 @@ internal sealed class InboxPlacementService : IInboxPlacementService
         return _http.PostJsonBodyNoResponseAsync(
             $"v4/inbox/seedlists/{PathEscape.Segment(seedlistName)}/seeds",
             new { email },
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v4/inbox/seedlists/{seedlist_name}/seeds");
     }
 
     public Task RemoveSeedAsync(string seedlistName, string email, CancellationToken cancellationToken = default)
@@ -246,14 +247,15 @@ internal sealed class InboxPlacementService : IInboxPlacementService
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
         return _http.DeleteNoResponseAsync(
             $"v4/inbox/seedlists/{PathEscape.Segment(seedlistName)}/seeds/{PathEscape.Segment(email)}",
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v4/inbox/seedlists/{seedlist_name}/seeds/{email}");
     }
 
     public Task<InboxPlacementResultList> ListResultsForSeedlistAsync(string seedlistName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(seedlistName);
         return _http.GetJsonAsync<InboxPlacementResultList>(
-            $"v4/inbox/seedlists/{PathEscape.Segment(seedlistName)}/results", null, cancellationToken);
+            $"v4/inbox/seedlists/{PathEscape.Segment(seedlistName)}/results", null, cancellationToken, routeTemplate: "v4/inbox/seedlists/{seedlist_name}/results");
     }
 
     public Task<InboxPlacementResultList> FilterResultsAsync(InboxPlacementResultsFilter filter, CancellationToken cancellationToken = default)
@@ -268,6 +270,6 @@ internal sealed class InboxPlacementService : IInboxPlacementService
             .Add("end_time", filter.EndTime)
             .Add("limit", filter.Limit)
             .Build();
-        return _http.GetJsonAsync<InboxPlacementResultList>("v4/inbox/results/filter", q, cancellationToken);
+        return _http.GetJsonAsync<InboxPlacementResultList>("v4/inbox/results/filter", q, cancellationToken, routeTemplate: "v4/inbox/results/filter");
     }
 }

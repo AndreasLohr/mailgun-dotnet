@@ -96,39 +96,47 @@ internal sealed class BounceClassificationService : IBounceClassificationService
     public BounceClassificationService(MailgunHttpClient http) => _http = http;
 
     public Task<BounceClassificationListResponse> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BounceClassificationListResponse>("v1/bounce-classification", null, cancellationToken);
+        _http.GetJsonAsync<BounceClassificationListResponse>("v1/bounce-classification", null, cancellationToken,
+            routeTemplate: "v1/bounce-classification");
 
     public Task<BounceClassification> GetAsync(string code, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
-        return _http.GetJsonAsync<BounceClassification>($"v1/bounce-classification/{PathEscape.Segment(code)}", null, cancellationToken);
+        return _http.GetJsonAsync<BounceClassification>($"v1/bounce-classification/{PathEscape.Segment(code)}", null, cancellationToken,
+            routeTemplate: "v1/bounce-classification/{code}");
     }
 
     public Task<BounceClassificationMetricsResponse> QueryMetricsAsync(BounceClassificationMetricsRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return _http.PostJsonBodyAsync<BounceClassificationMetricsResponse>("v2/bounce-classification/metrics", request, cancellationToken);
+        return _http.PostJsonBodyAsync<BounceClassificationMetricsResponse>("v2/bounce-classification/metrics", request, cancellationToken,
+            routeTemplate: "v2/bounce-classification/metrics");
     }
 
     public Task<BounceClassificationCodesResponse> ListCodesAsync(string classificationCode, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(classificationCode);
         return _http.GetJsonAsync<BounceClassificationCodesResponse>(
-            $"v1/bounce-classification/{PathEscape.Segment(classificationCode)}/codes", null, cancellationToken);
+            $"v1/bounce-classification/{PathEscape.Segment(classificationCode)}/codes", null, cancellationToken,
+            routeTemplate: "v1/bounce-classification/{classification_code}/codes");
     }
 
     public Task<BounceClassification> ClassifyAsync(ClassifyBounceRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return _http.PostJsonBodyAsync<BounceClassification>("v1/bounce-classification/classify", request, cancellationToken);
+        return _http.PostJsonBodyAsync<BounceClassification>("v1/bounce-classification/classify", request, cancellationToken,
+            routeTemplate: "v1/bounce-classification/classify");
     }
 
     public Task<BounceClassificationListResponse> ListCategoriesAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BounceClassificationListResponse>("v1/bounce-classification/categories", null, cancellationToken);
+        _http.GetJsonAsync<BounceClassificationListResponse>("v1/bounce-classification/categories", null, cancellationToken,
+            routeTemplate: "v1/bounce-classification/categories");
 
     public Task<BounceClassificationDimensionsResponse> ListDimensionsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BounceClassificationDimensionsResponse>("v2/bounce-classification/metrics/dimensions", null, cancellationToken);
+        _http.GetJsonAsync<BounceClassificationDimensionsResponse>("v2/bounce-classification/metrics/dimensions", null, cancellationToken,
+            routeTemplate: "v2/bounce-classification/metrics/dimensions");
 
     public Task<BounceClassificationCodesResponse> ListMetricsCodesAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BounceClassificationCodesResponse>("v2/bounce-classification/metrics/codes", null, cancellationToken);
+        _http.GetJsonAsync<BounceClassificationCodesResponse>("v2/bounce-classification/metrics/codes", null, cancellationToken,
+            routeTemplate: "v2/bounce-classification/metrics/codes");
 }

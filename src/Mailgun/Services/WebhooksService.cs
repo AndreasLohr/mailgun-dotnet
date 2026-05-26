@@ -12,7 +12,7 @@ internal sealed class WebhooksService : IWebhooksService
     public Task<WebhooksMap> ListDomainAsync(string domain, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        return _http.GetJsonAsync<WebhooksMap>($"v3/domains/{PathEscape.Segment(domain)}/webhooks", null, cancellationToken);
+        return _http.GetJsonAsync<WebhooksMap>($"v3/domains/{PathEscape.Segment(domain)}/webhooks", null, cancellationToken, routeTemplate: "v3/domains/{domain}/webhooks");
     }
 
     public Task<WebhookResponse> GetDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default)
@@ -20,7 +20,8 @@ internal sealed class WebhooksService : IWebhooksService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         return _http.GetJsonAsync<WebhookResponse>(
-            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", null, cancellationToken);
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", null, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/webhooks/{event_type}");
     }
 
     public Task<WebhookResponse> CreateDomainAsync(string domain, string eventType, IReadOnlyList<string> urls, CancellationToken cancellationToken = default)
@@ -30,7 +31,8 @@ internal sealed class WebhooksService : IWebhooksService
         return _http.PostFormAsync<WebhookResponse>(
             $"v3/domains/{PathEscape.Segment(domain)}/webhooks",
             BuildWebhookForm(eventType, urls),
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/webhooks");
     }
 
     public Task<WebhookResponse> UpdateDomainAsync(string domain, string eventType, IReadOnlyList<string> urls, CancellationToken cancellationToken = default)
@@ -41,7 +43,8 @@ internal sealed class WebhooksService : IWebhooksService
         AddUrls(fb, urls);
         return _http.PutFormAsync<WebhookResponse>(
             $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}",
-            fb, cancellationToken);
+            fb, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/webhooks/{event_type}");
     }
 
     public Task DeleteDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default)
@@ -49,7 +52,8 @@ internal sealed class WebhooksService : IWebhooksService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         return _http.DeleteNoResponseAsync(
-            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", cancellationToken);
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", cancellationToken,
+            routeTemplate: "v3/domains/{domain}/webhooks/{event_type}");
     }
 
     // ---------- Modern ID-based account-webhook API ----------
@@ -59,13 +63,13 @@ internal sealed class WebhooksService : IWebhooksService
         // Mailgun documents webhook_ids as a single comma-separated query parameter
         // (e.g. ?webhook_ids=a,b,c) — NOT as repeated webhook_ids=a&webhook_ids=b query params.
         var q = new QueryBuilder().Add("webhook_ids", JoinIdsOrNull(webhookIds)).Build();
-        return _http.GetJsonAsync<AccountWebhookListResponse>("v1/webhooks", q, cancellationToken);
+        return _http.GetJsonAsync<AccountWebhookListResponse>("v1/webhooks", q, cancellationToken, routeTemplate: "v1/webhooks");
     }
 
     public Task<AccountWebhook> GetAccountWebhookAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _http.GetJsonAsync<AccountWebhook>($"v1/webhooks/{PathEscape.Segment(id)}", null, cancellationToken);
+        return _http.GetJsonAsync<AccountWebhook>($"v1/webhooks/{PathEscape.Segment(id)}", null, cancellationToken, routeTemplate: "v1/webhooks/{webhook_id}");
     }
 
     public async Task<AccountWebhook> CreateAccountWebhookAsync(
@@ -84,7 +88,7 @@ internal sealed class WebhooksService : IWebhooksService
             .AddText("url", url)
             .AddText("description", description)
             .AddTextArray("event_types", eventTypes);
-        return await _http.PostMultipartAsync<AccountWebhook>("v1/webhooks", mp, cancellationToken).ConfigureAwait(false);
+        return await _http.PostMultipartAsync<AccountWebhook>("v1/webhooks", mp, cancellationToken, routeTemplate: "v1/webhooks").ConfigureAwait(false);
     }
 
     public async Task UpdateAccountWebhookAsync(
@@ -106,13 +110,14 @@ internal sealed class WebhooksService : IWebhooksService
             .AddTextArray("event_types", eventTypes);
         // Mailgun returns 204 No Content on success — no JSON body to parse.
         await _http.PutMultipartNoResponseAsync(
-            $"v1/webhooks/{PathEscape.Segment(id)}", mp, cancellationToken).ConfigureAwait(false);
+            $"v1/webhooks/{PathEscape.Segment(id)}", mp, cancellationToken,
+            routeTemplate: "v1/webhooks/{webhook_id}").ConfigureAwait(false);
     }
 
     public Task DeleteAccountWebhookAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return _http.DeleteNoResponseAsync($"v1/webhooks/{PathEscape.Segment(id)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v1/webhooks/{PathEscape.Segment(id)}", cancellationToken, routeTemplate: "v1/webhooks/{webhook_id}");
     }
 
     public Task DeleteAccountWebhooksAsync(
@@ -127,7 +132,7 @@ internal sealed class WebhooksService : IWebhooksService
         var qb = new QueryBuilder().Add("webhook_ids", JoinIdsOrNull(webhookIds));
         if (all)
             qb.Add("all", "true");
-        return _http.DeleteNoResponseAsync("v1/webhooks", qb.Build(), cancellationToken);
+        return _http.DeleteNoResponseAsync("v1/webhooks", qb.Build(), cancellationToken, routeTemplate: "v1/webhooks");
     }
 
     private static string? JoinIdsOrNull(IReadOnlyList<string>? ids) =>

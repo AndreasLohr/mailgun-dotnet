@@ -27,9 +27,11 @@ internal sealed class MessagesService : IMessagesService
             // method returning the Task would dispose the MultipartBuilder before the handler
             // gets to the request body, clearing the multipart parts.
             using var mp = BuildMultipart(request);
-            return await _http.PostMultipartAsync<SendMessageResponse>(path, mp, cancellationToken).ConfigureAwait(false);
+            return await _http.PostMultipartAsync<SendMessageResponse>(path, mp, cancellationToken,
+                routeTemplate: "v3/{domain}/messages").ConfigureAwait(false);
         }
-        return await _http.PostFormAsync<SendMessageResponse>(path, BuildForm(request), cancellationToken).ConfigureAwait(false);
+        return await _http.PostFormAsync<SendMessageResponse>(path, BuildForm(request), cancellationToken,
+            routeTemplate: "v3/{domain}/messages").ConfigureAwait(false);
     }
 
     public async Task<SendMessageResponse> SendMimeAsync(
@@ -53,7 +55,8 @@ internal sealed class MessagesService : IMessagesService
         mp.AddFile("message", "message.mime", mimeMessage, "message/rfc822");
 
         var path = $"v3/{PathEscape.Segment(domain)}/messages.mime";
-        return await _http.PostMultipartAsync<SendMessageResponse>(path, mp, cancellationToken).ConfigureAwait(false);
+        return await _http.PostMultipartAsync<SendMessageResponse>(path, mp, cancellationToken,
+            routeTemplate: "v3/{domain}/messages.mime").ConfigureAwait(false);
     }
 
     public Task<StoredMessage> GetStoredAsync(string domain, string storageKey, CancellationToken cancellationToken = default)
@@ -63,7 +66,8 @@ internal sealed class MessagesService : IMessagesService
         return _http.GetJsonAsync<StoredMessage>(
             $"v3/domains/{PathEscape.Segment(domain)}/messages/{PathEscape.Segment(storageKey)}",
             query: null,
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/messages/{storage_key}");
     }
 
     public Task DeleteStoredAsync(string domain, string storageKey, CancellationToken cancellationToken = default)
@@ -72,7 +76,8 @@ internal sealed class MessagesService : IMessagesService
         ArgumentException.ThrowIfNullOrWhiteSpace(storageKey);
         return _http.DeleteNoResponseAsync(
             $"v3/domains/{PathEscape.Segment(domain)}/messages/{PathEscape.Segment(storageKey)}",
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/messages/{storage_key}");
     }
 
     public Task<SendingQueueStatus> GetSendingQueuesAsync(string domain, CancellationToken cancellationToken = default)
@@ -81,7 +86,8 @@ internal sealed class MessagesService : IMessagesService
         return _http.GetJsonAsync<SendingQueueStatus>(
             $"v3/domains/{PathEscape.Segment(domain)}/sending_queues",
             query: null,
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/sending_queues");
     }
 
     public Task DeleteScheduledEnvelopesAsync(string domain, CancellationToken cancellationToken = default)
@@ -89,7 +95,8 @@ internal sealed class MessagesService : IMessagesService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         return _http.DeleteNoResponseAsync(
             $"v3/domains/{PathEscape.Segment(domain)}/envelopes",
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/envelopes");
     }
 
     private static FormBuilder BuildForm(SendMessageRequest r)

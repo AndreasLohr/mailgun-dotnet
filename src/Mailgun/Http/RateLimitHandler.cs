@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 
 namespace Mailgun.Http;
@@ -29,6 +30,18 @@ internal sealed class RateLimitHandler : DelegatingHandler
             {
                 return response;
             }
+
+            // One retry counter increment per *decided* retry. Read the route template from the
+            // request options where SendCoreAsync stamped it — the handler has no other channel.
+            var routeTemplate = request.Options.TryGetValue(MailgunMeter.RouteTemplateKey, out var rt) ? rt : string.Empty;
+            var reason = response.StatusCode == HttpStatusCode.TooManyRequests ? "429" : "5xx";
+            MailgunMeter.RequestRetries.Add(1, new TagList
+            {
+                { "http.request.method", request.Method.Method },
+                { "http.route", routeTemplate },
+                { "retry.reason", reason },
+                { "server.address", request.RequestUri?.Host ?? string.Empty },
+            });
 
             var delay = ComputeDelay(response, attempt);
             response.Dispose();

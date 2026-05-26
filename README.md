@@ -329,6 +329,29 @@ Emitted span tags per request:
 | `mailgun.rate_limit.remaining` | `X-RateLimit-Remaining` (when present) |
 | `exception.type` / `exception.message` | populated on failure |
 
+## OpenTelemetry metrics
+
+Alongside the per-request span, the SDK emits four instruments on a `MailgunMeter` (name = `"Mailgun"`, same as the activity source). Subscribe by registering the meter with your OpenTelemetry meter provider — zero NuGet dependencies, zero cost when no listener is attached.
+
+```csharp
+using Mailgun.Http;
+
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(m => m.AddMeter(MailgunMeter.Name)
+                       .AddOtlpExporter());
+```
+
+| Instrument | Type | Unit | Tags |
+|---|---|---|---|
+| `mailgun.client.request.duration` | Histogram&lt;double&gt; | `s` | `http.request.method`, `http.route`, `http.response.status_code`, `server.address` |
+| `mailgun.client.request.retries` | Counter&lt;long&gt; | `{retry}` | `http.request.method`, `http.route`, `retry.reason` (`"429"` or `"5xx"`), `server.address` |
+| `mailgun.client.request.errors` | Counter&lt;long&gt; | `{error}` | `http.request.method`, `http.route`, `error.type`, `server.address` |
+| `mailgun.client.active_requests` | UpDownCounter&lt;long&gt; | `{request}` | `http.request.method`, `server.address` |
+
+The `http.route` tag is a **route template** (e.g. `v3/{domain}/messages`, `v1/webhooks/{webhook_id}`) — never the runtime path. This keeps cardinality bounded regardless of how many distinct domains, addresses, or IDs your traffic touches. The per-request unique values (`mailgun.request_id`, `mailgun.rate_limit.remaining`) appear only on activity spans, not metric tags — putting them on a metric tag would blow up cardinality.
+
+Request rate is derived from the histogram's count; error rate from filtering the duration histogram on `http.response.status_code >= 400` OR from the dedicated `request.errors` counter (it covers both 4xx/5xx-mapped exceptions and raw transport failures like `HttpRequestException` / `TaskCanceledException`).
+
 ## Dependency Injection
 
 ```csharp

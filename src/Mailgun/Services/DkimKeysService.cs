@@ -125,7 +125,8 @@ internal sealed class DkimKeysService : IDkimKeysService
             .Add("selector", selector)
             .Add("page", page)
             .Build();
-        return _http.GetJsonAsync<DkimKeyListResponse>("v1/dkim/keys", q, cancellationToken);
+        return _http.GetJsonAsync<DkimKeyListResponse>("v1/dkim/keys", q, cancellationToken,
+            routeTemplate: "v1/dkim/keys");
     }
 
     public Task CreateAsync(CreateDkimKeyForSigningDomainRequest request, CancellationToken cancellationToken = default)
@@ -133,7 +134,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SigningDomain);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Selector);
-        return _http.PostJsonBodyNoResponseAsync("v1/dkim/keys", request, cancellationToken);
+        return _http.PostJsonBodyNoResponseAsync("v1/dkim/keys", request, cancellationToken,
+            routeTemplate: "v1/dkim/keys");
     }
 
     public Task DeleteAsync(string signingDomain, string selector, CancellationToken cancellationToken = default)
@@ -144,13 +146,15 @@ internal sealed class DkimKeysService : IDkimKeysService
             .Add("signing_domain", signingDomain)
             .Add("selector", selector)
             .Build();
-        return _http.DeleteNoResponseAsync("v1/dkim/keys", query, cancellationToken);
+        return _http.DeleteNoResponseAsync("v1/dkim/keys", query, cancellationToken,
+            routeTemplate: "v1/dkim/keys");
     }
 
     public Task<DkimKeyListResponse> ListForAuthorityAsync(string authority, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(authority);
-        return _http.GetJsonAsync<DkimKeyListResponse>($"v4/domains/{PathEscape.Segment(authority)}/keys", null, cancellationToken);
+        return _http.GetJsonAsync<DkimKeyListResponse>($"v4/domains/{PathEscape.Segment(authority)}/keys", null, cancellationToken,
+            routeTemplate: "v4/domains/{authority}/keys");
     }
 
     public Task<DkimKey> CreateForAuthorityAsync(string authority, CreateDkimKeyRequest request, CancellationToken cancellationToken = default)
@@ -159,7 +163,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SigningDomain);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Selector);
-        return _http.PostJsonBodyAsync<DkimKey>($"v4/domains/{PathEscape.Segment(authority)}/keys", request, cancellationToken);
+        return _http.PostJsonBodyAsync<DkimKey>($"v4/domains/{PathEscape.Segment(authority)}/keys", request, cancellationToken,
+            routeTemplate: "v4/domains/{authority}/keys");
     }
 
     public Task<DkimKeyActivationResult> ActivateForAuthorityAsync(string authority, string selector, CancellationToken cancellationToken = default)
@@ -169,7 +174,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         // Mailgun's documented endpoint: PUT /v4/domains/{authority}/keys/{selector}/activate, empty body.
         return _http.PutFormAsync<DkimKeyActivationResult>(
             $"v4/domains/{PathEscape.Segment(authority)}/keys/{PathEscape.Segment(selector)}/activate",
-            new FormBuilder(), cancellationToken);
+            new FormBuilder(), cancellationToken,
+            routeTemplate: "v4/domains/{authority}/keys/{selector}/activate");
     }
 
     public Task<DkimKeyActivationResult> DeactivateForAuthorityAsync(string authority, string selector, CancellationToken cancellationToken = default)
@@ -178,7 +184,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         ArgumentException.ThrowIfNullOrWhiteSpace(selector);
         return _http.PutFormAsync<DkimKeyActivationResult>(
             $"v4/domains/{PathEscape.Segment(authority)}/keys/{PathEscape.Segment(selector)}/deactivate",
-            new FormBuilder(), cancellationToken);
+            new FormBuilder(), cancellationToken,
+            routeTemplate: "v4/domains/{authority}/keys/{selector}/deactivate");
     }
 
     public Task DeleteForAuthorityAsync(string authority, string selector, CancellationToken cancellationToken = default)
@@ -187,7 +194,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         ArgumentException.ThrowIfNullOrWhiteSpace(selector);
         return _http.DeleteNoResponseAsync(
             $"v4/domains/{PathEscape.Segment(authority)}/keys/{PathEscape.Segment(selector)}",
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v4/domains/{authority}/keys/{selector}");
     }
 
     public async Task UpdateDkimAuthorityAsync(string domain, bool self, CancellationToken cancellationToken = default)
@@ -197,7 +205,8 @@ internal sealed class DkimKeysService : IDkimKeysService
         // with "true"/"false" string values for the self flag.
         using var mp = new MultipartBuilder().AddText("self", self ? "true" : "false");
         await _http.PutMultipartNoResponseAsync(
-            $"v3/domains/{PathEscape.Segment(domain)}/dkim_authority", mp, cancellationToken).ConfigureAwait(false);
+            $"v3/domains/{PathEscape.Segment(domain)}/dkim_authority", mp, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/dkim_authority").ConfigureAwait(false);
     }
 
     public async Task UpdateDkimSelectorAsync(string domain, string dkimSelector, CancellationToken cancellationToken = default)
@@ -207,6 +216,7 @@ internal sealed class DkimKeysService : IDkimKeysService
         // Mailgun's /v3/domains/{domain}/dkim_selector is documented multipart/form-data only.
         using var mp = new MultipartBuilder().AddText("dkim_selector", dkimSelector);
         await _http.PutMultipartNoResponseAsync(
-            $"v3/domains/{PathEscape.Segment(domain)}/dkim_selector", mp, cancellationToken).ConfigureAwait(false);
+            $"v3/domains/{PathEscape.Segment(domain)}/dkim_selector", mp, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/dkim_selector").ConfigureAwait(false);
     }
 }

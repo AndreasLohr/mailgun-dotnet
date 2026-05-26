@@ -16,21 +16,23 @@ internal sealed class TemplatesService : ITemplatesService
     {
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Build();
         return _http.GetSkipLimitPageAsync<Template, TemplateListEnvelope>(
-            "v4/templates", q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken);
+            "v4/templates", q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken,
+            routeTemplate: "v4/templates");
     }
 
     public AsyncPageable<Template> ListAllAsync(int? limit = null)
     {
         var q = new QueryBuilder().Add("limit", limit).Build();
         return _http.GetSkipLimitPageable<Template, TemplateListEnvelope>(
-            "v4/templates", q, e => e.Items, e => e.Paging, e => e.TotalCount);
+            "v4/templates", q, e => e.Items, e => e.Paging, e => e.TotalCount,
+            routeTemplate: "v4/templates");
     }
 
     public async Task<Template> GetAsync(string name, bool? active = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var q = new QueryBuilder().Add("active", active).Build();
-        var env = await _http.GetJsonAsync<TemplateResponse>($"v4/templates/{PathEscape.Segment(name)}", q, cancellationToken).ConfigureAwait(false);
+        var env = await _http.GetJsonAsync<TemplateResponse>($"v4/templates/{PathEscape.Segment(name)}", q, cancellationToken, routeTemplate: "v4/templates/{name}").ConfigureAwait(false);
         return env.Template;
     }
 
@@ -49,7 +51,7 @@ internal sealed class TemplatesService : ITemplatesService
             .Add("mjml", request.Mjml);
         if (request.Headers is not null)
             fb.Add("headers", JsonSerializer.Serialize(request.Headers, MailgunJsonOptions.Default));
-        var env = await _http.PostFormAsync<TemplateResponse>("v4/templates", fb, cancellationToken).ConfigureAwait(false);
+        var env = await _http.PostFormAsync<TemplateResponse>("v4/templates", fb, cancellationToken, routeTemplate: "v4/templates").ConfigureAwait(false);
         return env.Template;
     }
 
@@ -58,14 +60,14 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         var fb = new FormBuilder().Add("description", description);
-        var env = await _http.PutFormAsync<TemplateResponse>($"v4/templates/{PathEscape.Segment(name)}", fb, cancellationToken).ConfigureAwait(false);
+        var env = await _http.PutFormAsync<TemplateResponse>($"v4/templates/{PathEscape.Segment(name)}", fb, cancellationToken, routeTemplate: "v4/templates/{name}").ConfigureAwait(false);
         return env.Template;
     }
 
     public Task DeleteAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _http.DeleteNoResponseAsync($"v4/templates/{PathEscape.Segment(name)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v4/templates/{PathEscape.Segment(name)}", cancellationToken, routeTemplate: "v4/templates/{name}");
     }
 
     public async Task<Template> CopyAsync(string name, string targetName, CancellationToken cancellationToken = default)
@@ -74,7 +76,8 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(targetName);
         var env = await _http.PostFormAsync<TemplateResponse>(
             $"v4/templates/{PathEscape.Segment(name)}/copy/{PathEscape.Segment(targetName)}",
-            new FormBuilder(), cancellationToken).ConfigureAwait(false);
+            new FormBuilder(), cancellationToken,
+            routeTemplate: "v4/templates/{name}/copy/{target_name}").ConfigureAwait(false);
         return env.Template;
     }
 
@@ -84,7 +87,8 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(newName);
         var fb = new FormBuilder().Add("name", newName);
         var env = await _http.PutFormAsync<TemplateResponse>(
-            $"v4/templates/{PathEscape.Segment(name)}/rename", fb, cancellationToken).ConfigureAwait(false);
+            $"v4/templates/{PathEscape.Segment(name)}/rename", fb, cancellationToken,
+            routeTemplate: "v4/templates/{name}/rename").ConfigureAwait(false);
         return env.Template;
     }
 
@@ -93,7 +97,8 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Build();
         var env = await _http.GetJsonAsync<TemplateVersionListEnvelope>(
-            $"v4/templates/{PathEscape.Segment(name)}/versions", q, cancellationToken).ConfigureAwait(false);
+            $"v4/templates/{PathEscape.Segment(name)}/versions", q, cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions").ConfigureAwait(false);
         var items = env.Template?.Versions ?? new List<TemplateVersion>();
         return new SkipLimitPage<TemplateVersion>(items, env.Paging?.First, env.Paging?.Previous, env.Paging?.Next, env.Paging?.Last, totalCount: null);
     }
@@ -103,7 +108,8 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
         var env = await _http.GetJsonAsync<TemplateResponse>(
-            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", null, cancellationToken).ConfigureAwait(false);
+            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", null, cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions/{tag}").ConfigureAwait(false);
         return env.Template.Version ?? throw new InvalidOperationException("Mailgun did not return a version object.");
     }
 
@@ -123,7 +129,8 @@ internal sealed class TemplatesService : ITemplatesService
         if (request.Headers is not null)
             fb.Add("headers", JsonSerializer.Serialize(request.Headers, MailgunJsonOptions.Default));
         var env = await _http.PostFormAsync<TemplateResponse>(
-            $"v4/templates/{PathEscape.Segment(name)}/versions", fb, cancellationToken).ConfigureAwait(false);
+            $"v4/templates/{PathEscape.Segment(name)}/versions", fb, cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions").ConfigureAwait(false);
         return env.Template;
     }
 
@@ -140,7 +147,8 @@ internal sealed class TemplatesService : ITemplatesService
         if (request.Headers is not null)
             fb.Add("headers", JsonSerializer.Serialize(request.Headers, MailgunJsonOptions.Default));
         var env = await _http.PutFormAsync<TemplateResponse>(
-            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", fb, cancellationToken).ConfigureAwait(false);
+            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", fb, cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions/{tag}").ConfigureAwait(false);
         return env.Template.Version ?? throw new InvalidOperationException("Mailgun did not return a version object.");
     }
 
@@ -149,6 +157,7 @@ internal sealed class TemplatesService : ITemplatesService
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
         return _http.DeleteNoResponseAsync(
-            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", cancellationToken);
+            $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions/{tag}");
     }
 }

@@ -41,23 +41,27 @@ internal sealed class IpWarmupsService : IIpWarmupsService
     public IpWarmupsService(MailgunHttpClient http) => _http = http;
 
     public Task<IpWarmupListResponse> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<IpWarmupListResponse>("v3/ip_warmups", null, cancellationToken);
+        _http.GetJsonAsync<IpWarmupListResponse>("v3/ip_warmups", null, cancellationToken,
+            routeTemplate: "v3/ip_warmups");
 
     public Task<IpWarmup> GetAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.GetJsonAsync<IpWarmup>($"v3/ip_warmups/{PathEscape.Segment(ip)}", null, cancellationToken);
+        return _http.GetJsonAsync<IpWarmup>($"v3/ip_warmups/{PathEscape.Segment(ip)}", null, cancellationToken,
+            routeTemplate: "v3/ip_warmups/{ip}");
     }
 
     public Task<IpWarmup> StartAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.PostFormAsync<IpWarmup>($"v3/ip_warmups/{PathEscape.Segment(ip)}", new FormBuilder(), cancellationToken);
+        return _http.PostFormAsync<IpWarmup>($"v3/ip_warmups/{PathEscape.Segment(ip)}", new FormBuilder(), cancellationToken,
+            routeTemplate: "v3/ip_warmups/{ip}");
     }
 
     public Task StopAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.DeleteNoResponseAsync($"v3/ip_warmups/{PathEscape.Segment(ip)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v3/ip_warmups/{PathEscape.Segment(ip)}", cancellationToken,
+            routeTemplate: "v3/ip_warmups/{ip}");
     }
 }

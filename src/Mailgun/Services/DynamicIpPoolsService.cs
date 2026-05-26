@@ -58,31 +58,36 @@ internal sealed class DynamicIpPoolsService : IDynamicIpPoolsService
     public DynamicIpPoolsService(MailgunHttpClient http) => _http = http;
 
     public Task<DynamicIpPoolListResponse> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<DynamicIpPoolListResponse>("v1/dynamic_pools", null, cancellationToken);
+        _http.GetJsonAsync<DynamicIpPoolListResponse>("v1/dynamic_pools", null, cancellationToken,
+            routeTemplate: "v1/dynamic_pools");
 
     public Task<DynamicIpPool> GetAsync(string poolId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        return _http.GetJsonAsync<DynamicIpPool>($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", null, cancellationToken);
+        return _http.GetJsonAsync<DynamicIpPool>($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", null, cancellationToken,
+            routeTemplate: "v1/dynamic_pools/{pool_id}");
     }
 
     public Task<DynamicIpPool> CreateAsync(CreateDynamicIpPoolRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
-        return _http.PostJsonBodyAsync<DynamicIpPool>("v1/dynamic_pools", request, cancellationToken);
+        return _http.PostJsonBodyAsync<DynamicIpPool>("v1/dynamic_pools", request, cancellationToken,
+            routeTemplate: "v1/dynamic_pools");
     }
 
     public Task<DynamicIpPool> UpdateAsync(string poolId, UpdateDynamicIpPoolRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         ArgumentNullException.ThrowIfNull(request);
-        return _http.PutJsonBodyAsync<DynamicIpPool>($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", request, cancellationToken);
+        return _http.PutJsonBodyAsync<DynamicIpPool>($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", request, cancellationToken,
+            routeTemplate: "v1/dynamic_pools/{pool_id}");
     }
 
     public Task DeleteAsync(string poolId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        return _http.DeleteNoResponseAsync($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v1/dynamic_pools/{PathEscape.Segment(poolId)}", cancellationToken,
+            routeTemplate: "v1/dynamic_pools/{pool_id}");
     }
 }

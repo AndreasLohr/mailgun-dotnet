@@ -96,7 +96,8 @@ internal sealed class ValidateService : IValidateService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
         var q = new QueryBuilder().Add("address", address).Build();
-        return _http.GetJsonAsync<EmailValidationResult>("v4/address/validate", q, cancellationToken);
+        return _http.GetJsonAsync<EmailValidationResult>("v4/address/validate", q, cancellationToken,
+            routeTemplate: "v4/address/validate");
     }
 
     public async Task<BulkValidationJob> CreateBulkAsync(string listId, Stream csvStream, string fileName = "addresses.csv", CancellationToken cancellationToken = default)
@@ -104,22 +105,26 @@ internal sealed class ValidateService : IValidateService
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
         ArgumentNullException.ThrowIfNull(csvStream);
         using var mp = new MultipartBuilder().AddFile("file", fileName, csvStream, "text/csv");
-        return await _http.PostMultipartAsync<BulkValidationJob>($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", mp, cancellationToken).ConfigureAwait(false);
+        return await _http.PostMultipartAsync<BulkValidationJob>($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", mp, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/{list_id}").ConfigureAwait(false);
     }
 
     public Task<BulkValidationJob> GetBulkAsync(string listId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
-        return _http.GetJsonAsync<BulkValidationJob>($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", null, cancellationToken);
+        return _http.GetJsonAsync<BulkValidationJob>($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", null, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/{list_id}");
     }
 
     public Task<BulkValidationJobList> ListBulkAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BulkValidationJobList>("v4/address/validate/bulk", null, cancellationToken);
+        _http.GetJsonAsync<BulkValidationJobList>("v4/address/validate/bulk", null, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk");
 
     public Task DeleteBulkAsync(string listId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
-        return _http.DeleteNoResponseAsync($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v4/address/validate/bulk/{PathEscape.Segment(listId)}", cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/{list_id}");
     }
 
     public async Task<BulkPreview> CreateBulkPreviewAsync(string listId, Stream csvStream, string fileName = "addresses.csv", CancellationToken cancellationToken = default)
@@ -127,21 +132,25 @@ internal sealed class ValidateService : IValidateService
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
         ArgumentNullException.ThrowIfNull(csvStream);
         using var mp = new MultipartBuilder().AddFile("file", fileName, csvStream, "text/csv");
-        return await _http.PostMultipartAsync<BulkPreview>($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", mp, cancellationToken).ConfigureAwait(false);
+        return await _http.PostMultipartAsync<BulkPreview>($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", mp, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/preview/{list_id}").ConfigureAwait(false);
     }
 
     public Task<BulkPreview> GetBulkPreviewAsync(string listId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
-        return _http.GetJsonAsync<BulkPreview>($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", null, cancellationToken);
+        return _http.GetJsonAsync<BulkPreview>($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", null, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/preview/{list_id}");
     }
 
     public Task<BulkPreviewList> ListBulkPreviewsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<BulkPreviewList>("v4/address/validate/bulk/preview", null, cancellationToken);
+        _http.GetJsonAsync<BulkPreviewList>("v4/address/validate/bulk/preview", null, cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/preview");
 
     public Task DeleteBulkPreviewAsync(string listId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(listId);
-        return _http.DeleteNoResponseAsync($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v4/address/validate/bulk/preview/{PathEscape.Segment(listId)}", cancellationToken,
+            routeTemplate: "v4/address/validate/bulk/preview/{list_id}");
     }
 }

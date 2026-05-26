@@ -93,17 +93,17 @@ internal sealed class AnalyticsTagsService : IAnalyticsTagsService
 
     public Task<AnalyticsTagsListResponse> ListAsync(AnalyticsTagsFilter? filter = null, CancellationToken cancellationToken = default) =>
         // Mailgun's list-tags endpoint is POST, with a JSON body carrying optional filter + pagination.
-        _http.PostJsonBodyAsync<AnalyticsTagsListResponse>("v1/analytics/tags", filter ?? new AnalyticsTagsFilter(), cancellationToken);
+        _http.PostJsonBodyAsync<AnalyticsTagsListResponse>("v1/analytics/tags", filter ?? new AnalyticsTagsFilter(), cancellationToken, routeTemplate: "v1/analytics/tags");
 
     public Task DeleteAsync(string tag, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tag);
         // Mailgun's DELETE /v1/analytics/tags takes a JSON body with {tag}; tag is NOT in the URL.
-        return _http.DeleteJsonBodyNoResponseAsync("v1/analytics/tags", new DeleteAnalyticsTagBody(tag), cancellationToken);
+        return _http.DeleteJsonBodyNoResponseAsync("v1/analytics/tags", new DeleteAnalyticsTagBody(tag), cancellationToken, routeTemplate: "v1/analytics/tags");
     }
 
     public Task<TagLimits> GetLimitsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<TagLimits>("v1/analytics/tags/limits", null, cancellationToken);
+        _http.GetJsonAsync<TagLimits>("v1/analytics/tags/limits", null, cancellationToken, routeTemplate: "v1/analytics/tags/limits");
 
     public Task UpdateAsync(string tag, string description, CancellationToken cancellationToken = default)
     {
@@ -111,7 +111,7 @@ internal sealed class AnalyticsTagsService : IAnalyticsTagsService
         ArgumentNullException.ThrowIfNull(description);
         // Mailgun's PUT /v1/analytics/tags takes a JSON body with {tag, description}; tag is NOT in the URL.
         var body = new UpdateAnalyticsTagRequest { Tag = tag, Description = description };
-        return _http.PutJsonBodyNoResponseAsync("v1/analytics/tags", body, cancellationToken);
+        return _http.PutJsonBodyNoResponseAsync("v1/analytics/tags", body, cancellationToken, routeTemplate: "v1/analytics/tags");
     }
 }
 

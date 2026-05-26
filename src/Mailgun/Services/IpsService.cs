@@ -97,25 +97,29 @@ internal sealed class IpsService : IIpsService
     public Task<IpsListResponse> ListAsync(bool? dedicated = null, CancellationToken cancellationToken = default)
     {
         var q = new QueryBuilder().Add("dedicated", dedicated).Build();
-        return _http.GetJsonAsync<IpsListResponse>("v3/ips", q, cancellationToken);
+        return _http.GetJsonAsync<IpsListResponse>("v3/ips", q, cancellationToken,
+            routeTemplate: "v3/ips");
     }
 
     public Task<IpInfo> GetAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.GetJsonAsync<IpInfo>($"v3/ips/{PathEscape.Segment(ip)}", null, cancellationToken);
+        return _http.GetJsonAsync<IpInfo>($"v3/ips/{PathEscape.Segment(ip)}", null, cancellationToken,
+            routeTemplate: "v3/ips/{ip}");
     }
 
     public Task<IpDomainsResponse> ListDomainsAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.GetJsonAsync<IpDomainsResponse>($"v3/ips/{PathEscape.Segment(ip)}/domains", null, cancellationToken);
+        return _http.GetJsonAsync<IpDomainsResponse>($"v3/ips/{PathEscape.Segment(ip)}/domains", null, cancellationToken,
+            routeTemplate: "v3/ips/{ip}/domains");
     }
 
     public Task<IpsListResponse> ListByDomainAsync(string domain, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        return _http.GetJsonAsync<IpsListResponse>($"v3/domains/{PathEscape.Segment(domain)}/ips", null, cancellationToken);
+        return _http.GetJsonAsync<IpsListResponse>($"v3/domains/{PathEscape.Segment(domain)}/ips", null, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/ips");
     }
 
     public Task AttachToDomainAsync(string domain, string ip, CancellationToken cancellationToken = default)
@@ -123,28 +127,34 @@ internal sealed class IpsService : IIpsService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
         var fb = new FormBuilder().Add("ip", ip);
-        return _http.PostFormNoResponseAsync($"v3/domains/{PathEscape.Segment(domain)}/ips", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync($"v3/domains/{PathEscape.Segment(domain)}/ips", fb, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/ips");
     }
 
     public Task DetachFromDomainAsync(string domain, string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.DeleteNoResponseAsync($"v3/domains/{PathEscape.Segment(domain)}/ips/{PathEscape.Segment(ip)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v3/domains/{PathEscape.Segment(domain)}/ips/{PathEscape.Segment(ip)}", cancellationToken,
+            routeTemplate: "v3/domains/{domain}/ips/{ip}");
     }
 
     public Task RequestNewAsync(CancellationToken cancellationToken = default) =>
-        _http.PostFormNoResponseAsync("v3/ips/request/new", new FormBuilder(), cancellationToken);
+        _http.PostFormNoResponseAsync("v3/ips/request/new", new FormBuilder(), cancellationToken,
+            routeTemplate: "v3/ips/request/new");
 
     public Task<IpReputationBand> GetReputationBandAsync(string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.GetJsonAsync<IpReputationBand>($"v3/ips/{PathEscape.Segment(ip)}/ip_band", null, cancellationToken);
+        return _http.GetJsonAsync<IpReputationBand>($"v3/ips/{PathEscape.Segment(ip)}/ip_band", null, cancellationToken,
+            routeTemplate: "v3/ips/{ip}/ip_band");
     }
 
     public Task<IpsListResponse> ListDetailedAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<IpsListResponse>("v3/ips/details", null, cancellationToken);
+        _http.GetJsonAsync<IpsListResponse>("v3/ips/details", null, cancellationToken,
+            routeTemplate: "v3/ips/details");
 
     public Task<IpsListResponse> ListAllAccountIpsAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<IpsListResponse>("v3/ips/all", null, cancellationToken);
+        _http.GetJsonAsync<IpsListResponse>("v3/ips/all", null, cancellationToken,
+            routeTemplate: "v3/ips/all");
 }

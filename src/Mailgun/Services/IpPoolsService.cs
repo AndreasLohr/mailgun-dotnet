@@ -114,12 +114,12 @@ internal sealed class IpPoolsService : IIpPoolsService
     public IpPoolsService(MailgunHttpClient http) => _http = http;
 
     public Task<IpPoolListResponse> ListAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<IpPoolListResponse>("v3/ip_pools", null, cancellationToken);
+        _http.GetJsonAsync<IpPoolListResponse>("v3/ip_pools", null, cancellationToken, routeTemplate: "v3/ip_pools");
 
     public Task<IpPool> GetAsync(string poolId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        return _http.GetJsonAsync<IpPool>($"v3/ip_pools/{PathEscape.Segment(poolId)}", null, cancellationToken);
+        return _http.GetJsonAsync<IpPool>($"v3/ip_pools/{PathEscape.Segment(poolId)}", null, cancellationToken, routeTemplate: "v3/ip_pools/{pool_id}");
     }
 
     public Task<IpPool> CreateAsync(CreateIpPoolRequest request, CancellationToken cancellationToken = default)
@@ -134,7 +134,7 @@ internal sealed class IpPoolsService : IIpPoolsService
         var fb = new FormBuilder().Add("name", request.Name).Add("description", request.Description);
         foreach (var ip in request.Ips)
             fb.Add("ip", ip);
-        return _http.PostFormAsync<IpPool>("v3/ip_pools", fb, cancellationToken);
+        return _http.PostFormAsync<IpPool>("v3/ip_pools", fb, cancellationToken, routeTemplate: "v3/ip_pools");
     }
 
     public async Task UpdateAsync(string poolId, UpdateIpPoolRequest request, CancellationToken cancellationToken = default)
@@ -151,7 +151,8 @@ internal sealed class IpPoolsService : IIpPoolsService
         foreach (var ip in request.RemoveIps) mp.AddText("remove_ip", ip);
         foreach (var d in request.UnlinkDomains) mp.AddText("unlink_domain", d);
         await _http.PatchMultipartNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}", mp, cancellationToken).ConfigureAwait(false);
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}", mp, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}").ConfigureAwait(false);
     }
 
     public Task DeleteAsync(string poolId, string? replacementPool = null, CancellationToken cancellationToken = default)
@@ -162,7 +163,8 @@ internal sealed class IpPoolsService : IIpPoolsService
         // brittle pattern the unsubscribes endpoint just got cleaned up out of).
         var query = new QueryBuilder().Add("pool_id", replacementPool).Build();
         return _http.DeleteNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}", query, cancellationToken);
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}", query, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}");
     }
 
     public Task AddIpAsync(string poolId, string ip, CancellationToken cancellationToken = default)
@@ -172,14 +174,15 @@ internal sealed class IpPoolsService : IIpPoolsService
         // Mailgun's documented "add single IP" endpoint is PUT (no body), not POST with form.
         return _http.PutFormNoResponseAsync(
             $"v3/ip_pools/{PathEscape.Segment(poolId)}/ips/{PathEscape.Segment(ip)}",
-            new FormBuilder(), cancellationToken);
+            new FormBuilder(), cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/ips/{ip}");
     }
 
     public Task RemoveIpAsync(string poolId, string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         ArgumentException.ThrowIfNullOrWhiteSpace(ip);
-        return _http.DeleteNoResponseAsync($"v3/ip_pools/{PathEscape.Segment(poolId)}/ips/{PathEscape.Segment(ip)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v3/ip_pools/{PathEscape.Segment(poolId)}/ips/{PathEscape.Segment(ip)}", cancellationToken, routeTemplate: "v3/ip_pools/{pool_id}/ips/{ip}");
     }
 
     public Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default)
@@ -193,7 +196,8 @@ internal sealed class IpPoolsService : IIpPoolsService
         return _http.PostJsonBodyNoResponseAsync(
             $"v3/ip_pools/{PathEscape.Segment(poolId)}/ips.json",
             new { ips },
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/ips.json");
     }
 
     public async Task DelegateAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default)
@@ -204,14 +208,16 @@ internal sealed class IpPoolsService : IIpPoolsService
         // field per call. Previous SDK shape sent POST + JSON {subaccounts: [...]} and was rejected.
         using var mp = new MultipartBuilder().AddText("subaccount_id", subaccountId);
         await _http.PutMultipartNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken).ConfigureAwait(false);
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/delegate").ConfigureAwait(false);
     }
 
     public Task<IpPoolDelegationsResponse> ListDelegationsAsync(string poolId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         return _http.GetJsonAsync<IpPoolDelegationsResponse>(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegations", null, cancellationToken);
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegations", null, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/delegations");
     }
 
     public async Task RevokeDelegationAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default)
@@ -221,6 +227,7 @@ internal sealed class IpPoolsService : IIpPoolsService
         // Subaccount id goes in the multipart body, not the URL path.
         using var mp = new MultipartBuilder().AddText("subaccount_id", subaccountId);
         await _http.DeleteMultipartNoResponseAsync(
-            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken).ConfigureAwait(false);
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/delegate").ConfigureAwait(false);
     }
 }

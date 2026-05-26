@@ -17,20 +17,22 @@ internal sealed class MailingListsService : IMailingListsService
     {
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Add("address", address).Build();
         return _http.GetSkipLimitPageAsync<MailingList, MailingListListEnvelope>(
-            "v3/lists/pages", q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken);
+            "v3/lists/pages", q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken,
+            routeTemplate: "v3/lists/pages");
     }
 
     public AsyncPageable<MailingList> ListAllAsync(int? limit = null)
     {
         var q = new QueryBuilder().Add("limit", limit).Build();
         return _http.GetSkipLimitPageable<MailingList, MailingListListEnvelope>(
-            "v3/lists/pages", q, e => e.Items, e => e.Paging, e => e.TotalCount);
+            "v3/lists/pages", q, e => e.Items, e => e.Paging, e => e.TotalCount,
+            routeTemplate: "v3/lists/pages");
     }
 
     public async Task<MailingList> GetAsync(string address, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
-        var env = await _http.GetJsonAsync<MailingListSingleEnvelope>($"v3/lists/{PathEscape.Segment(address)}", null, cancellationToken).ConfigureAwait(false);
+        var env = await _http.GetJsonAsync<MailingListSingleEnvelope>($"v3/lists/{PathEscape.Segment(address)}", null, cancellationToken, routeTemplate: "v3/lists/{address}").ConfigureAwait(false);
         return env.List;
     }
 
@@ -45,7 +47,7 @@ internal sealed class MailingListsService : IMailingListsService
             .Add("description", request.Description)
             .Add("access_level", request.AccessLevel)
             .Add("reply_preference", request.ReplyPreference);
-        var env = await _http.PostFormAsync<MailingListSingleEnvelope>("v3/lists", fb, cancellationToken).ConfigureAwait(false);
+        var env = await _http.PostFormAsync<MailingListSingleEnvelope>("v3/lists", fb, cancellationToken, routeTemplate: "v3/lists").ConfigureAwait(false);
         return env.List;
     }
 
@@ -59,14 +61,14 @@ internal sealed class MailingListsService : IMailingListsService
             .Add("description", request.Description)
             .Add("access_level", request.AccessLevel)
             .Add("reply_preference", request.ReplyPreference);
-        var env = await _http.PutFormAsync<MailingListSingleEnvelope>($"v3/lists/{PathEscape.Segment(address)}", fb, cancellationToken).ConfigureAwait(false);
+        var env = await _http.PutFormAsync<MailingListSingleEnvelope>($"v3/lists/{PathEscape.Segment(address)}", fb, cancellationToken, routeTemplate: "v3/lists/{address}").ConfigureAwait(false);
         return env.List;
     }
 
     public Task DeleteAsync(string address, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(address);
-        return _http.DeleteNoResponseAsync($"v3/lists/{PathEscape.Segment(address)}", cancellationToken);
+        return _http.DeleteNoResponseAsync($"v3/lists/{PathEscape.Segment(address)}", cancellationToken, routeTemplate: "v3/lists/{address}");
     }
 
     public Task<SkipLimitPage<MailingListMember>> ListMembersAsync(string listAddress, int? limit = null, int? skip = null, bool? subscribed = null, CancellationToken cancellationToken = default)
@@ -75,7 +77,8 @@ internal sealed class MailingListsService : IMailingListsService
         var q = new QueryBuilder().Add("limit", limit).Add("skip", skip).Add("subscribed", subscribed).Build();
         return _http.GetSkipLimitPageAsync<MailingListMember, MailingListMembersEnvelope>(
             $"v3/lists/{PathEscape.Segment(listAddress)}/members/pages",
-            q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken);
+            q, null, e => e.Items, e => e.Paging, e => e.TotalCount, cancellationToken,
+            routeTemplate: "v3/lists/{list_address}/members/pages");
     }
 
     public AsyncPageable<MailingListMember> ListAllMembersAsync(string listAddress, int? limit = null, bool? subscribed = null)
@@ -84,7 +87,8 @@ internal sealed class MailingListsService : IMailingListsService
         var q = new QueryBuilder().Add("limit", limit).Add("subscribed", subscribed).Build();
         return _http.GetSkipLimitPageable<MailingListMember, MailingListMembersEnvelope>(
             $"v3/lists/{PathEscape.Segment(listAddress)}/members/pages",
-            q, e => e.Items, e => e.Paging, e => e.TotalCount);
+            q, e => e.Items, e => e.Paging, e => e.TotalCount,
+            routeTemplate: "v3/lists/{list_address}/members/pages");
     }
 
     public async Task<MailingListMember> GetMemberAsync(string listAddress, string memberAddress, CancellationToken cancellationToken = default)
@@ -93,7 +97,8 @@ internal sealed class MailingListsService : IMailingListsService
         ArgumentException.ThrowIfNullOrWhiteSpace(memberAddress);
         var env = await _http.GetJsonAsync<MailingListMemberSingleEnvelope>(
             $"v3/lists/{PathEscape.Segment(listAddress)}/members/{PathEscape.Segment(memberAddress)}",
-            null, cancellationToken).ConfigureAwait(false);
+            null, cancellationToken,
+            routeTemplate: "v3/lists/{list_address}/members/{member_address}").ConfigureAwait(false);
         return env.Member;
     }
 
@@ -105,7 +110,8 @@ internal sealed class MailingListsService : IMailingListsService
             throw new ArgumentException("Address is required.", nameof(request));
         var fb = MemberToForm(request);
         var env = await _http.PostFormAsync<MailingListMemberSingleEnvelope>(
-            $"v3/lists/{PathEscape.Segment(listAddress)}/members", fb, cancellationToken).ConfigureAwait(false);
+            $"v3/lists/{PathEscape.Segment(listAddress)}/members", fb, cancellationToken,
+            routeTemplate: "v3/lists/{list_address}/members").ConfigureAwait(false);
         return env.Member;
     }
 
@@ -117,7 +123,8 @@ internal sealed class MailingListsService : IMailingListsService
         var fb = MemberToForm(request);
         var env = await _http.PutFormAsync<MailingListMemberSingleEnvelope>(
             $"v3/lists/{PathEscape.Segment(listAddress)}/members/{PathEscape.Segment(memberAddress)}",
-            fb, cancellationToken).ConfigureAwait(false);
+            fb, cancellationToken,
+            routeTemplate: "v3/lists/{list_address}/members/{member_address}").ConfigureAwait(false);
         return env.Member;
     }
 
@@ -127,7 +134,8 @@ internal sealed class MailingListsService : IMailingListsService
         ArgumentException.ThrowIfNullOrWhiteSpace(memberAddress);
         return _http.DeleteNoResponseAsync(
             $"v3/lists/{PathEscape.Segment(listAddress)}/members/{PathEscape.Segment(memberAddress)}",
-            cancellationToken);
+            cancellationToken,
+            routeTemplate: "v3/lists/{list_address}/members/{member_address}");
     }
 
     public Task BulkAddMembersAsync(string listAddress, IReadOnlyList<AddMemberRequest> members, bool upsert = true, CancellationToken cancellationToken = default)
@@ -161,7 +169,7 @@ internal sealed class MailingListsService : IMailingListsService
         }
         var json = JsonSerializer.Serialize(dtos, MailgunJsonOptions.Default);
         var fb = new FormBuilder().Add("members", json).Add("upsert", upsert);
-        return _http.PostFormNoResponseAsync($"v3/lists/{PathEscape.Segment(listAddress)}/members.json", fb, cancellationToken);
+        return _http.PostFormNoResponseAsync($"v3/lists/{PathEscape.Segment(listAddress)}/members.json", fb, cancellationToken, routeTemplate: "v3/lists/{list_address}/members.json");
     }
 
     public async Task BulkAddMembersCsvAsync(string listAddress, Stream csvStream, string fileName = "members.csv", bool upsert = true, CancellationToken cancellationToken = default)
@@ -171,7 +179,7 @@ internal sealed class MailingListsService : IMailingListsService
         using var mp = new MultipartBuilder()
             .AddText("upsert", upsert)
             .AddFile("file", fileName, csvStream, "text/csv");
-        await _http.PostMultipartNoResponseAsync($"v3/lists/{PathEscape.Segment(listAddress)}/members.csv", mp, cancellationToken).ConfigureAwait(false);
+        await _http.PostMultipartNoResponseAsync($"v3/lists/{PathEscape.Segment(listAddress)}/members.csv", mp, cancellationToken, routeTemplate: "v3/lists/{list_address}/members.csv").ConfigureAwait(false);
     }
 
     private static FormBuilder MemberToForm(AddMemberRequest m)
