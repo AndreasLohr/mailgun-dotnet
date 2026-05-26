@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Reflection;
@@ -813,5 +815,213 @@ public class MutationTriageRegressionTests
 
         // One call only — the bare-verb last segment trips the action heuristic.
         Assert.Equal(1, counter.CallCount);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════════════════════
+    //   Final NoCoverage cleanup — kill the remaining 14 mutants reported by Stryker
+    // ═════════════════════════════════════════════════════════════════════════════════════════
+
+    // ───── MailgunHttpClient L374-378 — OnResponse callback exception activity event tags ─────
+
+    [Fact]
+    public async Task OnResponse_callback_exception_stamps_activity_event_with_exception_type_and_message_tags()
+    {
+        // The 4 mutants on lines 374-378 of MailgunHttpClient.cs target the activity event the
+        // SDK adds when an OnResponse callback throws: event name `mailgun.on_response.exception`,
+        // tags collection literal, and the `exception.type` + `exception.message` tag keys.
+        // The existing OnResponseCallbackTests cover the swallow-the-exception contract but don't
+        // assert on activity event tag contents, leaving those mutants NoCoverage.
+        const string UniqueErrorMessage = "callback-bomb-for-triage-test-a3f9e2";
+
+        var capturedActivities = new ConcurrentBag<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = src => src.Name == MailgunActivitySource.Name,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = a => capturedActivities.Add(a),
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var mockHandler = new MockHttpMessageHandler();
+        mockHandler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[],\"total_count\":0}");
+        using var http = new HttpClient(mockHandler) { BaseAddress = new Uri("https://api.mailgun.test/") };
+        using var client = new MailgunClient(new MailgunClientOptions
+        {
+            ApiKey = "k",
+            BaseUrl = "https://api.mailgun.test",
+            HttpClient = http,
+            OnResponse = _ => throw new InvalidOperationException(UniqueErrorMessage),
+        });
+
+        await client.Routes.ListAsync();
+
+        // Find the activity that recorded the callback exception. The unique message lets us pick
+        // it out of any other activities running in parallel under the same listener.
+        var matching = capturedActivities
+            .Where(a => a.Events.Any(e =>
+                e.Name == "mailgun.on_response.exception"
+                && e.Tags.Any(t => t.Key == "exception.message" && t.Value as string == UniqueErrorMessage)))
+            .ToList();
+
+        var activity = Assert.Single(matching);
+        var evt = activity.Events.Single(e => e.Name == "mailgun.on_response.exception");
+        var tags = evt.Tags.ToDictionary(t => t.Key, t => t.Value);
+        Assert.Equal("System.InvalidOperationException", tags["exception.type"]);
+        Assert.Equal(UniqueErrorMessage, tags["exception.message"]);
+    }
+
+    // ───── MailgunResponseMetadata L74 — TryParseUnixMillis catch ArgumentOutOfRangeException ─────
+
+    [Fact]
+    public async Task X_RateLimit_Reset_with_out_of_range_value_yields_null_reset_not_thrown_exception()
+    {
+        // TryParseUnixMillis wraps FromUnixTimeSeconds / FromUnixTimeMilliseconds in try/catch
+        // because both throw ArgumentOutOfRangeException for values outside [year 1, year 9999].
+        // A crafted X-RateLimit-Reset header value past year 9999 would otherwise crash the
+        // metadata-parse path. The catch block at line 74 was NoCoverage because no existing test
+        // gave it an out-of-range value.
+        MailgunResponseMetadata? captured = null;
+        var mockHandler = new MockHttpMessageHandler();
+        mockHandler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[],\"total_count\":0}",
+            headers: new Dictionary<string, string>
+            {
+                // 17 digits — long-parseable but far past the FromUnixTimeMilliseconds upper bound.
+                { "X-RateLimit-Reset", "99999999999999999" },
+            });
+        using var http = new HttpClient(mockHandler) { BaseAddress = new Uri("https://api.mailgun.test/") };
+        using var client = new MailgunClient(new MailgunClientOptions
+        {
+            ApiKey = "k",
+            BaseUrl = "https://api.mailgun.test",
+            HttpClient = http,
+            OnResponse = m => captured = m,
+        });
+
+        await client.Routes.ListAsync();
+
+        // The header was present and long-parseable; the catch caught the AOORE; Reset is null.
+        Assert.NotNull(captured);
+        Assert.Null(captured!.RateLimit?.Reset);
+    }
+
+    // ───── AccountServices L90 — Subaccounts.GetAsync URL ─────
+
+    [Fact]
+    public async Task Subaccounts_GetAsync_targets_v5_accounts_subaccounts_with_id_segment()
+    {
+        // The 2 mutants on line 90 target the path string and the route template literal for
+        // Subaccounts.GetAsync. No existing test covered this method, leaving both NoCoverage.
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"id\":\"acct_abc\",\"name\":\"team-a\"}");
+
+        var sub = await client.Subaccounts.GetAsync("acct_abc");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Get, req.Method);
+        Assert.EndsWith("/v5/accounts/subaccounts/acct_abc", req.Uri.AbsolutePath);
+        Assert.Equal("acct_abc", sub.Id);
+    }
+
+    // ───── SendAlertRule L182, L185 — DTO Dimension / Comparator default string.Empty ─────
+
+    [Fact]
+    public void ThresholdFilter_Dimension_default_initialiser_is_string_Empty()
+    {
+        // Pins the `= string.Empty` property initialiser on ThresholdFilter.Dimension. Stryker
+        // mutates this to a non-empty literal; the direct property read is the only way to
+        // observe the difference, since ThresholdFilter is a DTO with no validation hook on
+        // intake. (The SendAlertRule.Create test below doesn't catch this — that class is a
+        // different type.)
+        Assert.Equal(string.Empty, new ThresholdFilter().Dimension);
+    }
+
+    [Fact]
+    public void ThresholdFilter_Comparator_default_initialiser_is_string_Empty()
+    {
+        Assert.Equal(string.Empty, new ThresholdFilter().Comparator);
+    }
+
+    [Fact]
+    public async Task SendAlerts_Create_with_only_Dimension_unset_throws_on_default_empty_value()
+    {
+        // The Dimension property's default initialiser (`= string.Empty;`) is what the SDK's
+        // ValidateRequired check throws against when a caller doesn't set Dimension explicitly.
+        // The mutation replaces `string.Empty` with `"Stryker was here!"` — without this test
+        // the validation would silently pass for unset Dimension. Set all OTHER required fields
+        // so the validation order reaches the Dimension check.
+        var (client, _) = TestMailgunClient.Create();
+
+        var rule = new SendAlertRule
+        {
+            Name = "n",
+            Metric = "m",
+            Comparator = "c",
+            Limit = "1",
+            // Dimension intentionally unset — relies on the default.
+        };
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => client.SendAlerts.CreateAsync(rule));
+        Assert.Contains("dimension", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SendAlerts_Create_with_only_Comparator_unset_throws_on_default_empty_value()
+    {
+        var (client, _) = TestMailgunClient.Create();
+
+        var rule = new SendAlertRule
+        {
+            Name = "n",
+            Metric = "m",
+            Limit = "1",
+            Dimension = "d",
+            // Comparator intentionally unset.
+        };
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => client.SendAlerts.CreateAsync(rule));
+        Assert.Contains("comparator", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ───── TemplatesService L113 / L152 — InvalidOperationException on missing Version ─────
+
+    [Fact]
+    public async Task Templates_GetVersionAsync_throws_descriptive_error_when_response_has_no_version_object()
+    {
+        // The `?? throw new InvalidOperationException(...)` on Template.Version uses a specific
+        // message — the string-mutation on line 113 would silently clear it. Verify the message
+        // is what we promise.
+        var (client, handler) = TestMailgunClient.Create();
+        // Mailgun returns Template envelope but with version=null — exercises the ?? throw path.
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"template\":{\"name\":\"t1\",\"version\":null}}");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.Templates.GetVersionAsync("t1", "v1"));
+        Assert.Contains("Mailgun did not return a version object", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Templates_UpdateVersionAsync_throws_descriptive_error_when_response_has_no_version_object()
+    {
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"template\":{\"name\":\"t1\",\"version\":null}}");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.Templates.UpdateVersionAsync("t1", "v1", new UpdateTemplateVersionRequest { Template = "body" }));
+        Assert.Contains("Mailgun did not return a version object", ex.Message, StringComparison.Ordinal);
+    }
+
+    // ───── WebhooksService L105 — UpdateAccountWebhookAsync empty event-types throws with message ─────
+
+    [Fact]
+    public async Task UpdateAccountWebhook_with_empty_event_types_throws_with_descriptive_message()
+    {
+        // The string-mutation on line 105 would silently empty the error message. The existing
+        // CreateAccountWebhook_rejects_empty_event_types test asserts the exception type but not
+        // the message text, and there's no Update-side coverage at all. Pin both.
+        var (client, _) = TestMailgunClient.Create();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.Webhooks.UpdateAccountWebhookAsync("wh-1", "https://x", Array.Empty<string>()));
+        Assert.Contains("event type", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -34,11 +34,11 @@ internal sealed class MailgunHttpClient : IDisposable
             throw new ArgumentException("MailgunClientOptions.ApiKey is required.", nameof(options));
         }
 
+        // ResolveBaseUrl always returns a non-blank value because MailgunRegion is a non-nullable
+        // enum and the resolver falls through to the Us/Eu defaults when BaseUrl is unset. The
+        // earlier "blank ResolveBaseUrl → ArgumentException" guard was dead code with no reachable
+        // execution path.
         var resolvedBase = options.ResolveBaseUrl();
-        if (string.IsNullOrWhiteSpace(resolvedBase))
-        {
-            throw new ArgumentException("MailgunClientOptions base URL could not be resolved.", nameof(options));
-        }
         _baseUrl = new Uri(resolvedBase.TrimEnd('/') + "/");
         _onBehalfOf = options.OnBehalfOf;
         _userAgentSuffix = options.UserAgent;
@@ -321,6 +321,7 @@ internal sealed class MailgunHttpClient : IDisposable
         // Pre-compute tag values we'll need on both success and exception paths. Using TagList
         // (stack-allocated struct) instead of KeyValuePair[] keeps the metric hot-path alloc-free.
         var methodName = request.Method.Method;
+        // Stryker disable once all : RequestUri is set by the SDK before this point; the ?? fallback is defensive against null but unreachable on any production path.
         var hostName = request.RequestUri?.Host ?? string.Empty;
         var activeTags = new TagList
         {
@@ -380,9 +381,11 @@ internal sealed class MailgunHttpClient : IDisposable
                     }
                 }
 
+                // Stryker disable all : HttpClient sets Content to EmptyContent for empty bodies; the null branch is defensive.
                 var raw = response.Content is null
                     ? string.Empty
                     : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                // Stryker restore all
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -447,6 +450,7 @@ internal sealed class MailgunHttpClient : IDisposable
         var first = true;
         foreach (var kv in query)
         {
+            // Stryker disable once all : QueryBuilder.Add filters null values upfront; this `continue` is defensive against external IReadOnlyList callers.
             if (kv.Value is null)
                 continue;
             if (!first)
@@ -533,12 +537,13 @@ internal sealed class MailgunHttpClient : IDisposable
 
     private static void AppendDetails(object? raw, List<string> sink)
     {
+        // `parsed.Details` / `parsed.Errors` are typed `object?` in MailgunErrorResponse, so the
+        // System.Text.Json deserialiser always hands them through as JsonElement (or null). No
+        // call path inside the SDK passes a raw `string` here, so we don't carry a case-string-s
+        // arm — an earlier version had one but it was dead code.
         switch (raw)
         {
             case null:
-                return;
-            case string s when !string.IsNullOrWhiteSpace(s):
-                sink.Add(s);
                 return;
             case JsonElement el:
                 FlattenJson(el, sink);

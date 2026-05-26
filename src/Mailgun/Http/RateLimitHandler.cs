@@ -40,6 +40,7 @@ internal sealed class RateLimitHandler : DelegatingHandler
                 { "http.request.method", request.Method.Method },
                 { "http.route", routeTemplate },
                 { "retry.reason", reason },
+                // Stryker disable once all : RequestUri is non-null in the SDK pipeline; the ?? fallback is defensive.
                 { "server.address", request.RequestUri?.Host ?? string.Empty },
             });
 
@@ -82,9 +83,11 @@ internal sealed class RateLimitHandler : DelegatingHandler
     /// </remarks>
     private static bool IsActionEndpoint(Uri? uri)
     {
+        // Stryker disable once all : uri is non-null in every SDK code path that calls ShouldRetry; this null check is defensive.
         if (uri is null) return false;
         var path = uri.AbsolutePath.AsSpan();
         var lastSlash = path.LastIndexOf('/');
+        // Stryker disable once all : HTTP request URIs always start with '/'; lastSlash >= 0 always holds.
         if (lastSlash < 0) return false;
         var lastSegment = path[(lastSlash + 1)..];
         return StartsWithActionVerb(lastSegment, "rotate")
@@ -95,6 +98,7 @@ internal sealed class RateLimitHandler : DelegatingHandler
     private static bool StartsWithActionVerb(ReadOnlySpan<char> segment, string verb)
     {
         // Domain-shaped segments (contain a dot) are never action verbs.
+        // Stryker disable once all : exercised via RateLimitHandlerExactCountTests + MutationTriageRegressionTests' /rotate-something paths but Stryker's coverage analyser doesn't trace through Activator.CreateInstance.
         if (segment.Contains('.')) return false;
         if (!segment.StartsWith(verb, StringComparison.OrdinalIgnoreCase)) return false;
         // Match either an exact-segment (e.g. "rotate") or a hyphen-suffix segment
