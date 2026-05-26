@@ -62,9 +62,16 @@ public static class MailgunWebhookEndpointExtensions
                 return Results.Unauthorized();
             }
 
-            if (options.TokenCache is { } cache && !cache.MarkSeen(sig.Token, options.MaxClockSkew))
+            if (options.TokenCache is { } cache)
             {
-                return Results.Conflict();
+                // Call the async path so distributed implementations (Redis/SQL/Cosmos) can do I/O
+                // without sync-over-async on the request thread. In-process implementations inherit
+                // the default-interface ValueTask wrapper around their synchronous MarkSeen.
+                var fresh = await cache.MarkSeenAsync(sig.Token, options.MaxClockSkew, ct).ConfigureAwait(false);
+                if (!fresh)
+                {
+                    return Results.Conflict();
+                }
             }
 
             MailgunWebhookEvent evt;

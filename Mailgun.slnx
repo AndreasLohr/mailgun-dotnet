@@ -6,6 +6,7 @@
     <Project Path="src/Mailgun.AspNetCore/Mailgun.AspNetCore.csproj" />
     <Project Path="src/Mailgun.Extensions.DependencyInjection/Mailgun.Extensions.DependencyInjection.csproj" />
     <Project Path="src/Mailgun.Webhooks/Mailgun.Webhooks.csproj" />
+    <Project Path="src/Mailgun.Webhooks.DistributedCache/Mailgun.Webhooks.DistributedCache.csproj" />
     <Project Path="src/Mailgun/Mailgun.csproj" />
   </Folder>
   <Folder Name="/tests/">

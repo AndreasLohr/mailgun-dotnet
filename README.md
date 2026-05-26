@@ -22,6 +22,7 @@ A .NET SDK for the [Mailgun](https://documentation.mailgun.com/) HTTP API. Cover
 ```bash
 dotnet add package mailgun-dotnet
 dotnet add package mailgun-dotnet.Webhooks            # optional: typed webhook event parsing + signature verification
+dotnet add package mailgun-dotnet.Webhooks.DistributedCache  # optional: IDistributedCache-backed replay protection for multi-instance receivers
 dotnet add package mailgun-dotnet.AspNetCore          # optional: ASP.NET Core webhook endpoint helper
 dotnet add package mailgun-dotnet.Extensions.DependencyInjection  # optional: IServiceCollection.AddMailgun()
 ```
@@ -304,6 +305,37 @@ app.MapMailgunWebhook("/webhooks/mailgun",
 ```
 
 The helper returns 200 on success, 401 on invalid signature or stale timestamp, 409 on replay-cache hit, 400 on malformed JSON.
+
+### Replay protection across multiple instances
+
+`InMemoryWebhookTokenCache` keeps the seen-token set in a per-process `ConcurrentDictionary`. That's the right choice for a single instance but degrades silently when the receiver runs behind more than one pod / VM / container: a token replayed against a different instance hits a fresh dictionary and is accepted. For any multi-instance topology, install `mailgun-dotnet.Webhooks.DistributedCache` and wire it through `IDistributedCache`:
+
+```bash
+dotnet add package mailgun-dotnet.Webhooks.DistributedCache
+```
+
+```csharp
+// 1. Register any IDistributedCache implementation — Redis, SQL Server, NCache, Cosmos, etc.
+builder.Services.AddStackExchangeRedisCache(o =>
+{
+    o.Configuration = builder.Configuration.GetConnectionString("Redis");
+});
+
+// 2. Register the adapter as IWebhookTokenCache.
+builder.Services.AddMailgunWebhookDistributedTokenCache();
+
+// 3. In the endpoint setup, resolve the cache from DI instead of newing up the in-memory one.
+app.MapMailgunWebhook("/webhooks/mailgun",
+    new MailgunWebhookEndpointOptions
+    {
+        SigningKey   = builder.Configuration["Mailgun:HttpSigningKey"]!,
+        MaxClockSkew = TimeSpan.FromMinutes(15),
+        TokenCache   = app.Services.GetRequiredService<IWebhookTokenCache>(),
+    },
+    /* ... handler ... */);
+```
+
+`IDistributedCache` deliberately doesn't expose atomic set-if-not-exists, so the adapter implements replay-check as get-then-set — two concurrent webhooks carrying the same token can both be treated as fresh in a small race window. For Mailgun replay protection this is acceptable (tokens are large random strings, attacks aren't typically concurrent, the second replay onward is reliably blocked); Stripe's official webhook samples accept the same trade-off. Callers needing strict atomicity should implement `IWebhookTokenCache` directly against their store's primitive (e.g. StackExchange.Redis's `SETNX`).
 
 ## OpenTelemetry tracing
 

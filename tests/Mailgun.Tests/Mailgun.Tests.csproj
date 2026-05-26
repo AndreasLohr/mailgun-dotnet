@@ -42,6 +42,7 @@
     <ProjectReference Include="..\..\src\Mailgun\Mailgun.csproj" />
     <ProjectReference Include="..\..\src\Mailgun.Extensions.DependencyInjection\Mailgun.Extensions.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\src\Mailgun.Webhooks\Mailgun.Webhooks.csproj" />
+    <ProjectReference Include="..\..\src\Mailgun.Webhooks.DistributedCache\Mailgun.Webhooks.DistributedCache.csproj" />
     <ProjectReference Include="..\..\src\Mailgun.AspNetCore\Mailgun.AspNetCore.csproj" />
   </ItemGroup>
 

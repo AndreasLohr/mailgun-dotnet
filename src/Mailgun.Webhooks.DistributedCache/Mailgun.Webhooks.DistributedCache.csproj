@@ -2,26 +2,27 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <RootNamespace>Mailgun.Webhooks</RootNamespace>
-    <AssemblyName>Mailgun.Webhooks</AssemblyName>
+    <RootNamespace>Mailgun.Webhooks.DistributedCache</RootNamespace>
+    <AssemblyName>Mailgun.Webhooks.DistributedCache</AssemblyName>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageId>mailgun-dotnet.Webhooks</PackageId>
-    <Description>Typed webhook event parsing and HMAC-SHA256 signature verification for the mailgun-dotnet SDK. Framework-agnostic — usable from console apps, Azure Functions, AWS Lambdas.</Description>
+    <PackageId>mailgun-dotnet.Webhooks.DistributedCache</PackageId>
+    <Description>IDistributedCache-backed IWebhookTokenCache for the mailgun-dotnet webhook receiver. Replay protection across multiple application instances — Redis, SQL Server, NCache, or any other IDistributedCache implementation.</Description>
     <Authors>Andreas Lohr</Authors>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <Copyright>Copyright (c) 2026 Andreas Lohr. All rights reserved.</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>mailgun;sdk;email;webhooks;hmac</PackageTags>
+    <PackageTags>mailgun;sdk;email;webhooks;hmac;replay;distributed;redis;idistributedcache</PackageTags>
     <Version>0.8.0</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/AndreasLohr/mailgun-dotnet</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Mailgun.Tests" />
-    <InternalsVisibleTo Include="Mailgun.AspNetCore" />
+    <ProjectReference Include="..\Mailgun.Webhooks\Mailgun.Webhooks.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

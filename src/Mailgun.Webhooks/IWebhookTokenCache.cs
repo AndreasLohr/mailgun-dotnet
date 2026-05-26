@@ -13,6 +13,17 @@ public interface IWebhookTokenCache
     /// for the next <paramref name="ttl"/> and return <c>true</c>.
     /// </summary>
     bool MarkSeen(string token, TimeSpan ttl);
+
+    /// <summary>
+    /// Async counterpart of <see cref="MarkSeen"/>. The endpoint helper calls this overload so
+    /// that distributed implementations (Redis, SQL, Cosmos) can do I/O without blocking the
+    /// request thread on <c>.GetAwaiter().GetResult()</c>. Default implementation delegates to the
+    /// synchronous overload so existing in-process implementations (e.g.
+    /// <see cref="InMemoryWebhookTokenCache"/>) keep working unchanged — distributed adapters
+    /// override this and leave <see cref="MarkSeen"/> as a not-supported throw.
+    /// </summary>
+    ValueTask<bool> MarkSeenAsync(string token, TimeSpan ttl, CancellationToken cancellationToken = default) =>
+        new(MarkSeen(token, ttl));
 }
 
 /// <summary>

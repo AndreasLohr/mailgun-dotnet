@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -94,15 +93,20 @@ public class RouteTemplateLiteralTests
     }
 
     /// <summary>
-    /// Walks up from this source file's directory at compile time (via <see cref="CallerFilePathAttribute"/>)
-    /// to find <c>src/Mailgun/Services</c>. This avoids depending on the test runner's working
-    /// directory, which varies between <c>dotnet test</c> invocations and IDE test discovery.
+    /// Walks up from the test binary's runtime directory to find <c>src/Mailgun/Services</c>.
     /// </summary>
-    private static string LocateServicesDirectory([CallerFilePath] string callerPath = "")
+    /// <remarks>
+    /// Previous implementations used <c>[CallerFilePath]</c>, but this repo's Directory.Build.props
+    /// enables <c>Deterministic</c> + <c>ContinuousIntegrationBuild</c> + Microsoft.SourceLink.GitHub,
+    /// which together cause the C# compiler to rewrite source paths to deterministic <c>/_/</c>-prefixed
+    /// forms in CI builds. A <c>[CallerFilePath]</c> baked at compile time then becomes a synthetic
+    /// path that doesn't exist on disk, so directory traversal failed on every CI run.
+    /// <see cref="AppContext.BaseDirectory"/> resolves at runtime and is immune to source-path
+    /// rewriting — it points to the bin output dir, from which the repo root is a known walk up.
+    /// </remarks>
+    private static string LocateServicesDirectory()
     {
-        // callerPath at compile time is the absolute path of THIS source file inside the repo.
-        // Walk up until we find a `src` sibling, then descend into Mailgun/Services.
-        var dir = new DirectoryInfo(Path.GetDirectoryName(callerPath)!);
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
             var candidate = Path.Combine(dir.FullName, "src", "Mailgun", "Services");
@@ -110,6 +114,6 @@ public class RouteTemplateLiteralTests
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException(
-            $"Could not locate src/Mailgun/Services from caller path '{callerPath}'.");
+            $"Could not locate src/Mailgun/Services from runtime base '{AppContext.BaseDirectory}'.");
     }
 }
