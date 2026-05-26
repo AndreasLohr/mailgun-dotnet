@@ -194,12 +194,14 @@ internal sealed class MessagesService : IMessagesService
 
     /// <summary>
     /// Merges <paramref name="primary"/> and <paramref name="secondary"/> into a single dictionary,
-    /// with <paramref name="primary"/> winning on key collision. Returns null when both inputs
-    /// are empty so callers can short-circuit.
+    /// with <paramref name="primary"/> winning on key collision. Returns null when both inputs are
+    /// empty so callers can short-circuit. Parameters and return are the concrete
+    /// <see cref="Dictionary{TKey, TValue}"/> type to satisfy CA1859 (the .NET 8 SDK flags
+    /// IReadOnlyDictionary indirection here as an avoidable virtual-dispatch hit on a hot path).
     /// </summary>
-    private static IReadOnlyDictionary<string, string>? MergeVariables(
-        IReadOnlyDictionary<string, string> primary,
-        IReadOnlyDictionary<string, string> secondary)
+    private static Dictionary<string, string>? MergeVariables(
+        Dictionary<string, string> primary,
+        Dictionary<string, string> secondary)
     {
         if (primary.Count == 0 && secondary.Count == 0)
             return null;

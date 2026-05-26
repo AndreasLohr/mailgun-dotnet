@@ -54,6 +54,32 @@ jobs:
           name: nupkgs
           path: ./artifacts/*.nupkg
 
+  build-net8-only:
+    name: build on .NET 8 SDK only (analyzer-gap guard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deliberately install ONLY the .NET 8 SDK so we exercise the .NET 8 analyzer baseline
+      # in isolation. The main "build" job installs both SDKs and lets `dotnet` pick the higher
+      # one (.NET 10), which masks CA rules that .NET 8 enforces but .NET 10 has relaxed
+      # (e.g. CA1859, CA1716 — see Directory.Build.props and tests/Mailgun.Tests/Mailgun.Tests.csproj).
+      - name: Setup .NET 8 SDK only
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      # Pass TargetFrameworks=net8.0 so we don't try to compile the net10.0 target with an SDK
+      # that doesn't know about it. This is purely a "does the .NET 8 analyzer pass cleanly?" job.
+      - name: Build (net8.0 only)
+        run: dotnet build -c Release --no-restore -p:TargetFrameworks=net8.0
+
+      - name: Test (net8.0 only)
+        run: dotnet test tests/Mailgun.Tests/Mailgun.Tests.csproj -c Release --no-build -p:TargetFrameworks=net8.0 --verbosity normal
+
   mutation:
     name: mutation test (manual)
     if: github.event_name == 'workflow_dispatch'

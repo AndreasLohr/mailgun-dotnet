@@ -30,6 +30,18 @@
          warning. Until then, leaving CS1591 fully off avoids 2000+ noise-only edits. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
+    <!-- CA1716: Identifiers should not match keywords (cross-language interop concern).
+         Suppressed because the SDK mirrors Mailgun's documented wire field names on public
+         method parameters — IMessagesService.SendMimeAsync uses `to` because Mailgun's
+         endpoint takes a `to` field; IBouncesService.CreateAsync uses `error` because the
+         endpoint takes an `error` field. Renaming would force users to translate between
+         the SDK's parameter names and Mailgun's docs — a worse trade than tolerating a
+         theoretical VB.NET keyword collision. This SDK is not intended for VB.NET interop
+         and the SDK's other interface members are already C#-only-friendly anyway. The
+         .NET 8 analyzer baseline elevates this to a build-failing severity that the .NET 10
+         baseline does not. -->
+    <NoWarn>$(NoWarn);CA1716</NoWarn>
+
     <!-- Reproducible builds: same source + same SDK = byte-identical assembly + symbols. -->
     <Deterministic>true</Deterministic>
     <!-- CI=true is set by GitHub Actions / most build hosts. The flag bakes the build environment

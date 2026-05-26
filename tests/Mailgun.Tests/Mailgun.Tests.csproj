@@ -7,6 +7,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+
+    <!-- Suppressions for test-only code conventions that .NET 8 SDK analyzers flag as build-breaking.
+         CA1707: test methods follow the standard xUnit `Snake_Case_Style` naming for readability of
+           the failure output; renaming would harm test discoverability with no production benefit.
+         CA1861: literal `new[] { ... }` arguments in test arrange-blocks are clearer than a sea of
+           private static readonly fields; the perf-on-hot-path concern doesn't apply to tests.
+         CA1305: locale-aware IFormatProvider on ToString — tests run in CI with invariant culture
+           and the values formatted are simple integers / unix timestamps where locale doesn't bite.
+         CA1859: concrete-return-type optimization in test helper builders is irrelevant — tests
+           don't care about devirtualization.
+         CS1998: a handful of test methods are declared `async Task` purely to match a shared helper
+           signature; they intentionally have no `await`. -->
+    <NoWarn>$(NoWarn);CA1707;CA1861;CA1305;CA1859;CS1998</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

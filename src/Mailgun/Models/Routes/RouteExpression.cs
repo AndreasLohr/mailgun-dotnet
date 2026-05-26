@@ -65,7 +65,10 @@ public abstract class RouteExpression
         return sb.ToString();
     }
 
-    private static RouteExpression Combine(string op, RouteExpression[] children)
+    // Return type is the concrete NaryExpression (not the abstract RouteExpression) so the .NET 8
+    // SDK's CA1859 analyzer is satisfied — even though the public factory methods (And/Or) erase to
+    // RouteExpression at their callers' call sites.
+    private static NaryExpression Combine(string op, RouteExpression[] children)
     {
         ArgumentNullException.ThrowIfNull(children);
         if (children.Length < 2)
