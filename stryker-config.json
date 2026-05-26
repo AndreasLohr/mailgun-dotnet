@@ -22,8 +22,8 @@
     ],
     "concurrency": 4,
     "verbosity": "info",
-    "dashboard": {
-      "project": "github.com/AndreasLohr/mailgun-dotnet",
+    "project-info": {
+      "name": "github.com/AndreasLohr/mailgun-dotnet",
       "module": "mailgun-dotnet"
     }
   }
