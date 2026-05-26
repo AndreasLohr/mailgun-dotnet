@@ -25,6 +25,11 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <!-- Used by the RouteTemplate literal-only static check (Telemetry/RouteTemplateLiteralTests.cs).
+         The check walks the service source files with Roslyn to assert every `routeTemplate:` argument
+         is a string literal and never an interpolated string — the kind of cardinality bug that
+         dynamic tests can't reliably catch because they typically run with a single fake domain. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
