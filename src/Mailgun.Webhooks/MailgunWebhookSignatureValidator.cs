@@ -28,16 +28,24 @@ public static class MailgunWebhookSignatureValidator
         ArgumentNullException.ThrowIfNull(token);
         ArgumentNullException.ThrowIfNull(signature);
 
-        using var hmac = new HMACSHA256(Encoding.ASCII.GetBytes(signingKey));
-        var data = Encoding.ASCII.GetBytes(timestamp + token);
+        // UTF-8, not ASCII. Mailgun-issued signing keys / timestamps / tokens are all hex digits or
+        // numeric strings — so every byte is identical to its ASCII form on the wire, no
+        // compatibility risk. ASCII's default encoder is best-fit and silently maps any non-ASCII
+        // code point to '?' (0x3F), so a signing key with a smart-quote / BOM / accidental non-ASCII
+        // byte would collide with every other string that ASCII-encodes to the same '?'-laced bytes.
+        // A crypto primitive must never lossy-encode its keying material.
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var data = Encoding.UTF8.GetBytes(timestamp + token);
         var hash = hmac.ComputeHash(data);
 
         // Mailgun's signature is lowercase hex.
         var expected = HexLower(hash);
         var actual = signature.Trim().ToLowerInvariant();
 
-        var expectedBytes = Encoding.ASCII.GetBytes(expected);
-        var actualBytes = Encoding.ASCII.GetBytes(actual);
+        // Comparison bytes are guaranteed hex (0-9, a-f) — ASCII and UTF-8 produce identical
+        // single-byte sequences. Kept on UTF-8 for symmetry with the input-encoding above.
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+        var actualBytes = Encoding.UTF8.GetBytes(actual);
         if (expectedBytes.Length != actualBytes.Length)
             return false;
         return CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);

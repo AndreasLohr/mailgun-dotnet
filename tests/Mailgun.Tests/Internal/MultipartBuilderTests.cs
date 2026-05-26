@@ -61,4 +61,36 @@ public class MultipartBuilderTests
         _ = ms.Position;
         ms.Dispose();
     }
+
+    [Fact]
+    public async Task AddFile_byteArray_does_not_alias_callers_buffer()
+    {
+        // Regression: the byte[] overload's docstring promises "the builder copies the bytes" but
+        // the implementation passed the array straight into ByteArrayContent(byte[]), which stores
+        // the reference. A caller that recycled the buffer (ArrayPool rental, batch-send staging
+        // buffer reuse, etc.) would leak the post-attach state onto the wire. The Stream overload
+        // already defeats this aliasing; the byte[] overload now does the same with an explicit
+        // Buffer.BlockCopy clone before constructing ByteArrayContent.
+        var buffer = Encoding.ASCII.GetBytes("ORIGINAL_BYTES");
+        using var mp = new MultipartBuilder()
+            .AddFile("attachment", "a.bin", buffer, "application/octet-stream");
+
+        // Mutate AFTER AddFile returns but BEFORE the multipart body is serialized.
+        for (var i = 0; i < buffer.Length; i++) buffer[i] = (byte)'X';
+
+        var body = await mp.Build().ReadAsStringAsync();
+        Assert.Contains("ORIGINAL_BYTES", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("XXXXXXXXXXXXXX", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddFile_byteArray_rejects_null_content()
+    {
+        // The Stream overload guards with ArgumentNullException.ThrowIfNull; the byte[] overload
+        // previously didn't and would have NRE'd inside ByteArrayContent's constructor. Mirror the
+        // same explicit guard now that we own the copy step.
+        using var mp = new MultipartBuilder();
+        Assert.Throws<ArgumentNullException>(() =>
+            mp.AddFile("attachment", "a.bin", (byte[])null!, "application/octet-stream"));
+    }
 }

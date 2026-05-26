@@ -462,7 +462,10 @@ internal sealed class MailgunHttpClient : IDisposable
     private static StringContent BuildJsonContent(object body)
     {
         ArgumentNullException.ThrowIfNull(body);
-        string json;
+        // Initialise upfront so any future Stryker mutation that removes the catch-block throw still
+        // produces compilable code — otherwise the entire method drops out of mutation testing
+        // under Stryker's safe-mode (Use of unassigned local variable 'json', CS0165).
+        var json = string.Empty;
         try
         {
             json = JsonSerializer.Serialize(body, body.GetType(), MailgunJsonOptions.Default);

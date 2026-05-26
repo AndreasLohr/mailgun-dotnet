@@ -1,10 +1,15 @@
 # mailgun-dotnet
 
+[![CI](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/AndreasLohr/mailgun-dotnet/security/code-scanning)
+[![NuGet](https://img.shields.io/nuget/v/mailgun-dotnet.svg?label=mailgun-dotnet)](https://www.nuget.org/packages/mailgun-dotnet/)
+[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%2010.0-512BD4?logo=dotnet)](#install)
+
 A .NET SDK for the [Mailgun](https://documentation.mailgun.com/) HTTP API. Covers every non-deprecated endpoint across Mailgun's `v1`–`v5` surface (Messages, Domains, Suppressions, Routes, Mailing Lists, Templates, Webhooks, Analytics, Validate, Inbox Placement, IPs, Subaccounts, Account, Users, Keys, …) with idiomatic hand-written DTOs.
 
 ## Features
 
-- **Broad API coverage** — 26 resource services covering Mailgun's non-deprecated v1–v5 surface: Messages, Domains (including SMTP-credential CRUD), IPs, IP Pools, Dynamic IP Pools, IP Warmups, DKIM Keys, DKIM Security (rotation + auto-rotation), Account & Domain Webhooks, Suppressions (Bounces / Complaints / Unsubscribes / Allowlists), Routes, Mailing Lists, Templates (+ versions), Analytics, Analytics Tags, Bounce Classification, Validate (+ bulk), Inbox Placement (seedlists / results / tests / providers), Alerts, Send Alerts, Limits, Subaccounts, Custom Message Limit, Account, Users (RBAC), Keys. The deprecated v3 endpoints (Events, Stats, Tags, Domain Templates, Domain Webhooks v3, Forwards, x509) are intentionally excluded — see the "Endpoint coverage" section below for the modern replacements.
+- **Broad API coverage** — 26 resource services covering Mailgun's non-deprecated v1–v5 surface: Messages, Domains (including SMTP-credential CRUD), IPs, IP Pools, Dynamic IP Pools, IP Warmups, DKIM Keys, DKIM Security (rotation + auto-rotation), Account & Domain Webhooks, Suppressions (Bounces / Complaints / Unsubscribes / Allowlists), Routes, Mailing Lists, Templates (+ versions), Analytics, Analytics Tags, Bounce Classification, Validate (+ bulk), Inbox Placement (seedlists / results / tests / providers), Alerts, Send Alerts, Limits, Subaccounts, Custom Message Limit, Account, Users (RBAC), Keys. The deprecated v3 endpoints (Events, Stats, Tags, Domain Templates, Forwards, x509) are intentionally excluded — see the "Endpoint coverage" section below for the modern replacements.
 - **Typed end-to-end** — request and response DTOs for every endpoint; `System.Text.Json` with snake_case mapping, RFC-2822, and Unix-timestamp converters.
 - **Two-region deployment** — `MailgunRegion.Us` → `api.mailgun.net`, `MailgunRegion.Eu` → `api.eu.mailgun.net`. Selected at construction time with no per-call overhead.
 - **Subaccount impersonation** — `client.ForSubaccount("acct_id")` returns a derived client sharing the parent's transport with `X-Mailgun-On-Behalf-Of` injected on every request.
@@ -13,7 +18,7 @@ A .NET SDK for the [Mailgun](https://documentation.mailgun.com/) HTTP API. Cover
 - **Structured exceptions** — `MailgunApiException` exposes the HTTP status, parsed message + details, `X-Mailgun-Request-Id`, and rate-limit headers. `MailgunRateLimitException` is a distinct subtype for catch-block branching.
 - **DI-friendly** — opt-in `mailgun-dotnet.Extensions.DependencyInjection` package wires `IMailgunClient` through `IHttpClientFactory`. The core package has zero `Microsoft.Extensions.*` dependencies so it runs in console apps, AWS Lambda, Azure Functions, Unity, etc.
 - **Typed webhook receiver** — opt-in `mailgun-dotnet.Webhooks` + `mailgun-dotnet.AspNetCore` companion packages. Parses Mailgun's 8 event types into strongly-typed events, verifies HMAC-SHA256 signatures with constant-time compare and an optional anti-replay token cache, and ships a one-line `MapMailgunWebhook` endpoint helper.
-- **OpenTelemetry-native tracing** — `MailgunActivitySource.Name = "Mailgun"` emits a client span per HTTP call. Zero NuGet dependencies, zero cost when no listener is attached.
+- **OpenTelemetry-native tracing + metrics** — `MailgunActivitySource` emits a client span per HTTP call; `MailgunMeter` emits `mailgun.client.*` instruments (request duration histogram, retries / errors counters, active-requests gauge) tagged with route templates so per-endpoint dashboards stay low-cardinality. Both share the name `"Mailgun"`. Zero NuGet dependencies, zero cost when no listener is attached.
 - **Mutation-tested** — Stryker.NET is wired as a local tool. Current baseline: 75.4% overall mutation score, ~77% covered-code kill rate (see [Mutation testing](#mutation-testing) for the round-by-round table).
 - **Multi-target** — `net8.0` and `net10.0`.
 
@@ -426,13 +431,13 @@ dotnet stryker
 
 The HTML report lands in `StrykerOutput/<timestamp>/reports/mutation-report.html`. Configuration is in [stryker-config.json](./stryker-config.json).
 
-Current baseline (311 tests, ~1293 mutants reached by tests):
+Current baseline (round 9 — 445 tests, 1816 mutants reached by tests):
 
-- **Overall mutation score: 75.4%** (993 killed / 290 survived / 10 timeout / 38 not covered by any test).
-- **Covered-code kill rate: ~77%** on the mutants the test suite reaches.
-- The 38 NoCoverage survivors are concentrated in fallback / unreachable code paths (an OpenTelemetry listener that's not registered in tests; an exception-message string the tests don't assert text on; a couple of `JsonValueKind` arms in `FlattenJson` that only trigger for non-standard error envelopes; some `TimeSpan.Zero` equality boundaries in the retry-backoff math).
-- The 290 covered-code survivors are predominantly equivalent mutations and boolean-combination edge cases where the mutated behavior is unobservable through the public API.
-- **4 real bugs found and fixed during the survivor-by-survivor triage**: `Templates.CreateVersionAsync`, `InboxPlacement.CreateSeedlistAsync` / `CreateTestAsync`, `DynamicIpPools.CreateAsync`, and `Users.CreateAsync` were all missing required-field validation on their typed request DTOs (an empty `Name` / `Email` / `Tag` / `Seedlist` would have been sent to Mailgun as an empty string instead of throwing `ArgumentException` at the call site).
+- **Overall mutation score: 63.2%** (1143 killed / 592 survived / 4 timeout / 77 not covered by any test).
+- **Covered-code kill rate: 66.0%** on the mutants the test suite reaches.
+- **The score dropped from 75.4% → 63.2% between round 8 and round 9.** This is real, not noise: between the two runs the SDK added the OpenTelemetry metrics surface (v0.7.0), a `IDistributedCache`-backed webhook replay cache (v0.8.0), webhook crypto + multipart-copy hardening, and ~233 route-template literals across every service callsite. That code surface grew faster than the survivor-by-survivor triage pass that lifted earlier rounds — round 9 is the "feature snapshot, awaiting triage" data point, not a regression in test quality.
+- The 77 NoCoverage survivors and 592 covered-code survivors are dominated by mutations on the new code surface listed above. A targeted triage round (the same pattern that turned round 6 into round 7) is the next move to bring the score back above 75%.
+- **4 real bugs found and fixed during earlier survivor-by-survivor triage**: `Templates.CreateVersionAsync`, `InboxPlacement.CreateSeedlistAsync` / `CreateTestAsync`, `DynamicIpPools.CreateAsync`, and `Users.CreateAsync` were all missing required-field validation on their typed request DTOs (an empty `Name` / `Email` / `Tag` / `Seedlist` would have been sent to Mailgun as an empty string instead of throwing `ArgumentException` at the call site).
 
 Progression — each round expanded test coverage and reran Stryker:
 
@@ -446,6 +451,7 @@ Progression — each round expanded test coverage and reran Stryker:
 | + DKIM services + extended IPs / IpPools / InboxPlacement / BounceClassification / Limits (~40 endpoints) | 269 | 896 | 364 | 73 | 67.2% |
 | + survivor triage: 4 bug fixes + blank-arg sweep + HTTP-client behavior + exact-retry-count tests | 305 | 979 | 283 | 73 | 73.9% |
 | + high-ROI NoCoverage killers: dead-code purge, missing `ListAllAsync` coverage, OpenTelemetry `ActivityListener` tests | 311 | 993 | 290 | 38 | 75.4% |
+| **v0.8.x feature snapshot** — OpenTelemetry metrics surface, distributed-cache replay protection, webhook crypto / multipart-copy hardening, Roslyn cardinality guardrail. New code surface added faster than survivor triage caught up; awaiting a dedicated triage round | 445 | 1143 | 592 | 77 | 63.2% |
 
 ## License
 

@@ -75,6 +75,48 @@ public class MailgunWebhookSignatureValidatorTests
             SigningKey, futureGarbage, token, sig, TimeSpan.FromMinutes(15)));
     }
 
+    [Fact]
+    public void Distinct_non_ascii_signing_keys_no_longer_collide_to_question_mark()
+    {
+        // Regression: previously the validator did Encoding.ASCII.GetBytes(signingKey), whose
+        // best-fit fallback silently rewrote every non-ASCII code point to '?' (0x3F). That made
+        // "key-é", "key-ñ", "key-中", and the literal "key-?" all HMAC-equivalent. A signature
+        // computed for "key-?" would validate against any of the others — a real, if narrow,
+        // crypto-correctness bug. With UTF-8 encoding each of these is byte-distinct and produces
+        // a different HMAC.
+        const string timestamp = "1700000000";
+        const string token = "tok-abc-123";
+
+        // Compute the signature the way Mailgun's server would, using the literal "key-?" key.
+        using var hmacAscii = new HMACSHA256(Encoding.UTF8.GetBytes("key-?"));
+        var sigForQuestionMarkKey = Convert.ToHexString(
+            hmacAscii.ComputeHash(Encoding.UTF8.GetBytes(timestamp + token))).ToLowerInvariant();
+
+        // The literal "key-?" still validates — happy path.
+        Assert.True(MailgunWebhookSignatureValidator.IsValid("key-?", timestamp, token, sigForQuestionMarkKey));
+
+        // Each of the previously-colliding Unicode keys must now FAIL validation.
+        Assert.False(MailgunWebhookSignatureValidator.IsValid("key-é", timestamp, token, sigForQuestionMarkKey));
+        Assert.False(MailgunWebhookSignatureValidator.IsValid("key-ñ", timestamp, token, sigForQuestionMarkKey));
+        Assert.False(MailgunWebhookSignatureValidator.IsValid("key-中", timestamp, token, sigForQuestionMarkKey));
+    }
+
+    [Fact]
+    public void Non_ascii_token_no_longer_collides_to_question_mark()
+    {
+        // Same hazard as the key-collision test above, but applied to the per-webhook token field.
+        const string signingKey = "key-fake-12345";
+        const string timestamp = "1700000000";
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(signingKey));
+        var sigForQuestionMarkToken = Convert.ToHexString(
+            hmac.ComputeHash(Encoding.UTF8.GetBytes(timestamp + "tok-?"))).ToLowerInvariant();
+
+        Assert.True(MailgunWebhookSignatureValidator.IsValid(signingKey, timestamp, "tok-?", sigForQuestionMarkToken));
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(signingKey, timestamp, "tok-é", sigForQuestionMarkToken));
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(signingKey, timestamp, "tok-中", sigForQuestionMarkToken));
+    }
+
     private static (string Timestamp, string Token, string Signature) ComputeSignature(string key, int secondsAgo)
     {
         var ts = DateTimeOffset.UtcNow.AddSeconds(-secondsAgo).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);

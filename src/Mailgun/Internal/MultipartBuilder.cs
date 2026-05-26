@@ -72,7 +72,17 @@ internal sealed class MultipartBuilder : IDisposable
     /// </summary>
     public MultipartBuilder AddFile(string name, string fileName, byte[] content, string? mediaType = null)
     {
-        var bc = new ByteArrayContent(content);
+        ArgumentNullException.ThrowIfNull(content);
+        // ByteArrayContent(byte[]) stores the reference — it does NOT copy. So a caller that
+        // recycles the array (ArrayPool rental returned after AddFile, a reused staging buffer in
+        // a batch send loop, anything async) would leak post-attach mutations onto the wire.
+        // The Stream overload below has a multi-line comment explaining exactly this aliasing hazard
+        // and was rewritten to defeat it; the byte[] overload's docstring already promises the
+        // builder copies, so honour that here with an explicit clone.
+        var copy = new byte[content.Length];
+        Buffer.BlockCopy(content, 0, copy, 0, content.Length);
+
+        var bc = new ByteArrayContent(copy);
         if (!string.IsNullOrWhiteSpace(mediaType))
         {
             bc.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
