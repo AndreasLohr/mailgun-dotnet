@@ -21,6 +21,10 @@
       "!**/Pagination/PagingLinks.cs"
     ],
     "concurrency": 4,
-    "verbosity": "info"
+    "verbosity": "info",
+    "dashboard": {
+      "project": "github.com/AndreasLohr/mailgun-dotnet",
+      "module": "mailgun-dotnet"
+    }
   }
 }

@@ -3,6 +3,7 @@
 [![CI](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/AndreasLohr/mailgun-dotnet/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/AndreasLohr/mailgun-dotnet/security/code-scanning)
 [![NuGet](https://img.shields.io/nuget/v/mailgun-dotnet.svg?label=mailgun-dotnet)](https://www.nuget.org/packages/mailgun-dotnet/)
+[![Mutation score](https://img.shields.io/endpoint?style=flat&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2FAndreasLohr%2Fmailgun-dotnet%2Fmain)](https://dashboard.stryker-mutator.io/reports/github.com/AndreasLohr/mailgun-dotnet/main)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%2010.0-512BD4?logo=dotnet)](#install)
 
 A .NET SDK for the [Mailgun](https://documentation.mailgun.com/) HTTP API. Covers every non-deprecated endpoint across Mailgun's `v1`–`v5` surface (Messages, Domains, Suppressions, Routes, Mailing Lists, Templates, Webhooks, Analytics, Validate, Inbox Placement, IPs, Subaccounts, Account, Users, Keys, …) with idiomatic hand-written DTOs.

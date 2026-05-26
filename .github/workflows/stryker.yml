@@ -1,0 +1,56 @@
+name: Stryker mutation testing
+
+# Stryker takes ~25 min on this codebase, so a per-push run would waste GH Actions minutes and
+# slow the feedback loop on every commit. Pattern instead:
+#   * weekly schedule (Mondays 04:00 UTC = quiet hours US + EU) → keeps the public dashboard fresh
+#   * workflow_dispatch → on-demand after substantive changes
+# The dashboard score badge in README.md is driven by whichever of these runs was latest.
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+# A second run cancels the first — if a manual dispatch is fired while the scheduled run is mid-flight,
+# we don't want two parallel Strykers fighting for the same dashboard slot.
+concurrency:
+  group: stryker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stryker:
+    name: Stryker mutation testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Dashboard upload requires the project's API key from the org's secrets store. Stryker reads
+      # STRYKER_DASHBOARD_API_KEY automatically; never log or echo it.
+      STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (8 + 10)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      # `--reporter dashboard` appends to the static `progress / html / cleartext` reporter list in
+      # stryker-config.json without polluting local runs (local `dotnet stryker` keeps producing
+      # the HTML report only). `--version main` pins the dashboard slot — every scheduled run
+      # overwrites the `main` slot with fresh numbers, which drives the README badge.
+      - name: Run Stryker.NET with dashboard upload
+        run: dotnet stryker --reporter dashboard --version main
+
+      # Keep the HTML report as a build artifact regardless of outcome — useful for triaging
+      # failures or downloading a snapshot when the dashboard is rate-limited.
+      - name: Upload Stryker HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stryker-report-${{ github.run_id }}
+          path: StrykerOutput/
+          retention-days: 30
