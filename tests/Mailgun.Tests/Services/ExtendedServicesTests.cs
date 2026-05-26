@@ -50,18 +50,34 @@ public class ExtendedServicesTests
     // ── IpPools extensions ──
 
     [Fact]
-    public async Task IpPools_ReplaceIps_posts_json_with_ips_array_to_ips_json_subpath()
+    public async Task IpPools_AddIps_posts_json_with_ips_array_to_ips_json_subpath()
     {
+        // Mailgun documents POST /v3/ip_pools/{id}/ips.json as "Add multiple IPs" — the SDK no
+        // longer pretends this is a replace (the misleading ReplaceIpsAsync was renamed/removed).
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
 
-        await client.IpPools.ReplaceIpsAsync("p1", new[] { "1.1.1.1", "2.2.2.2" });
+        await client.IpPools.AddIpsAsync("p1", new[] { "1.1.1.1", "2.2.2.2" });
 
         var req = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Post, req.Method);
         Assert.Equal("application/json", req.ContentType);
         Assert.EndsWith("/v3/ip_pools/p1/ips.json", req.Uri.AbsolutePath);
         Assert.Contains("\"ips\":[\"1.1.1.1\",\"2.2.2.2\"]", req.Body!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task IpPools_AddIp_puts_to_ips_segment_subpath()
+    {
+        // PUT /v3/ip_pools/{id}/ips/{ip} — Mailgun's documented "add single IP" endpoint.
+        var (client, handler) = TestMailgunClient.Create();
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
+
+        await client.IpPools.AddIpAsync("p1", "1.1.1.1");
+
+        var req = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Put, req.Method);
+        Assert.EndsWith("/v3/ip_pools/p1/ips/1.1.1.1", req.Uri.AbsolutePath);
     }
 
     [Fact]
@@ -247,35 +263,50 @@ public class ExtendedServicesTests
     // ── Limits extensions ──
 
     [Fact]
-    public async Task Limits_Enable_and_Disable_post_empty_json_to_enable_disable_subpaths()
+    public async Task Limits_CRUD_hits_documented_paths_and_json_body()
     {
+        // Mailgun documents /v1/thresholds/limits as a CRUD-over-named-rules resource (List/Get/
+        // Create/Update/Delete by name) — NOT the obsolete /enable & /disable subpaths the SDK
+        // used to call.
         var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"items\":[{\"name\":\"daily-cap\",\"metric\":\"accepted_count\",\"comparator\":\"gt\",\"limit\":\"1000\",\"dimension\":\"domain\"}],\"total\":1}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"name\":\"daily-cap\",\"metric\":\"accepted_count\",\"comparator\":\"gt\",\"limit\":\"1000\",\"dimension\":\"domain\"}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"name\":\"new-rule\",\"id\":\"abc\"}");
+        handler.EnqueueResponse(HttpStatusCode.OK, "{\"name\":\"new-rule\"}");
+        handler.EnqueueResponse(HttpStatusCode.NoContent, "");
 
-        await client.Limits.EnableAsync();
-        await client.Limits.DisableAsync();
+        var list = await client.Limits.ListAsync();
+        await client.Limits.GetAsync("daily-cap");
+        await client.Limits.CreateAsync(new LimitRule
+        {
+            Name = "new-rule", Metric = "accepted_count", Comparator = "gt",
+            Limit = "5000", Dimension = "domain",
+        });
+        await client.Limits.UpdateAsync("new-rule", new LimitRule
+        {
+            Name = "new-rule", Metric = "accepted_count", Comparator = "gt",
+            Limit = "10000", Dimension = "domain",
+        });
+        await client.Limits.DeleteAsync("new-rule");
 
-        Assert.Equal(2, handler.Requests.Count);
-        Assert.Equal(HttpMethod.Post, handler.Requests[0].Method);
-        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
-        Assert.EndsWith("/v1/thresholds/limits/enable", handler.Requests[0].Uri.AbsolutePath);
-        Assert.EndsWith("/v1/thresholds/limits/disable", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Single(list.Items!);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.EndsWith("/v1/thresholds/limits", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Get, handler.Requests[1].Method);
+        Assert.EndsWith("/v1/thresholds/limits/daily-cap", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Post, handler.Requests[2].Method);
+        Assert.Equal("application/json", handler.Requests[2].ContentType);
+        Assert.Contains("\"name\":\"new-rule\"", handler.Requests[2].Body!, StringComparison.Ordinal);
+        Assert.Equal(HttpMethod.Put, handler.Requests[3].Method);
+        Assert.EndsWith("/v1/thresholds/limits/new-rule", handler.Requests[3].Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Delete, handler.Requests[4].Method);
     }
 
     [Fact]
-    public async Task Limits_GetUsage_returns_typed_usage_response()
+    public async Task Limits_Create_rejects_missing_required_fields()
     {
-        var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK,
-            "{\"daily_used\":1234,\"daily_remaining\":8766,\"monthly_used\":5000,\"enabled\":true}");
-
-        var u = await client.Limits.GetUsageAsync();
-
-        var req = Assert.Single(handler.Requests);
-        Assert.EndsWith("/v1/thresholds/limits/usage", req.Uri.AbsolutePath);
-        Assert.Equal(1234, u.DailyUsed);
-        Assert.Equal(8766, u.DailyRemaining);
-        Assert.True(u.Enabled);
+        var (client, _) = TestMailgunClient.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.Limits.CreateAsync(new LimitRule { Name = "x" /* missing metric/comparator/limit/dimension */ }));
     }
 }

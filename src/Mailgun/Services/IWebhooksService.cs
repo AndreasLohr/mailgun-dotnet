@@ -3,25 +3,31 @@ using Mailgun.Models.Webhooks;
 namespace Mailgun.Services;
 
 /// <summary>
-/// Account-level webhooks (<c>/v1/webhooks</c>) and per-domain webhooks (<c>/v4/domains/{domain}/webhooks</c>).
+/// Account-level webhooks (<c>/v1/webhooks</c>) and per-domain webhooks
+/// (<c>/v3/domains/{domain}/webhooks/{event_type}</c>).
 /// Event types: <c>accepted</c>, <c>delivered</c>, <c>opened</c>, <c>clicked</c>, <c>unsubscribed</c>,
 /// <c>complained</c>, <c>permanent_fail</c>, <c>temporary_fail</c>. Each event supports up to 3 destination URLs.
 /// </summary>
+/// <remarks>
+/// The per-event-type domain-webhook CRUD lives at v3 in Mailgun's API; v4 only exposes the
+/// collection-level POST/PUT/DELETE without an event-type segment. Earlier SDK releases mapped these
+/// to v4 paths with an event-type segment — those calls hit endpoints Mailgun does not serve.
+/// </remarks>
 public interface IWebhooksService
 {
-    /// <summary><c>GET /v4/domains/{domain}/webhooks</c> — full webhook map for the domain.</summary>
+    /// <summary><c>GET /v3/domains/{domain}/webhooks</c> — full webhook map for the domain.</summary>
     Task<WebhooksMap> ListDomainAsync(string domain, CancellationToken cancellationToken = default);
 
-    /// <summary><c>GET /v4/domains/{domain}/webhooks/{eventType}</c> — single webhook for the domain.</summary>
+    /// <summary><c>GET /v3/domains/{domain}/webhooks/{eventType}</c> — single webhook for the domain.</summary>
     Task<WebhookResponse> GetDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default);
 
-    /// <summary><c>POST /v4/domains/{domain}/webhooks</c> — register a webhook for the domain.</summary>
+    /// <summary><c>POST /v3/domains/{domain}/webhooks</c> — register a webhook for the domain.</summary>
     Task<WebhookResponse> CreateDomainAsync(string domain, string eventType, IReadOnlyList<string> urls, CancellationToken cancellationToken = default);
 
-    /// <summary><c>PUT /v4/domains/{domain}/webhooks/{eventType}</c> — replace a webhook's URLs.</summary>
+    /// <summary><c>PUT /v3/domains/{domain}/webhooks/{eventType}</c> — replace a webhook's URLs.</summary>
     Task<WebhookResponse> UpdateDomainAsync(string domain, string eventType, IReadOnlyList<string> urls, CancellationToken cancellationToken = default);
 
-    /// <summary><c>DELETE /v4/domains/{domain}/webhooks/{eventType}</c> — delete a webhook.</summary>
+    /// <summary><c>DELETE /v3/domains/{domain}/webhooks/{eventType}</c> — delete a webhook.</summary>
     Task DeleteDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default);
 
     // ----- Modern ID-based account-webhook API (multiple webhooks per event type) -----

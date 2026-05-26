@@ -13,16 +13,24 @@ public interface IIpPoolsService
     Task<IpPool> CreateAsync(CreateIpPoolRequest request, CancellationToken cancellationToken = default);
     Task UpdateAsync(string poolId, UpdateIpPoolRequest request, CancellationToken cancellationToken = default);
     Task DeleteAsync(string poolId, string? replacementPool = null, CancellationToken cancellationToken = default);
-    /// <summary><c>POST /v3/ip_pools/{poolId}/ips</c> — add IPs to a pool.</summary>
-    Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default);
+
+    /// <summary><c>PUT /v3/ip_pools/{poolId}/ips/{ip}</c> — add a single IP to a pool.</summary>
+    Task AddIpAsync(string poolId, string ip, CancellationToken cancellationToken = default);
+
     /// <summary><c>DELETE /v3/ip_pools/{poolId}/ips/{ip}</c> — remove an IP from a pool.</summary>
     Task RemoveIpAsync(string poolId, string ip, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// <c>POST /v3/ip_pools/{poolId}/ips.json</c> — replace the IP list of a pool in a single
-    /// JSON-bodied call. Use when adding/removing many IPs at once to avoid the per-IP fan-out.
+    /// <c>POST /v3/ip_pools/{poolId}/ips.json</c> — add multiple IPs to a pool in one JSON-bodied call.
     /// </summary>
-    Task ReplaceIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default);
+    /// <remarks>
+    /// Mailgun's documented operation for this endpoint is "Add multiple IPs", NOT "replace the pool's
+    /// IP list". A previous SDK release exposed this as <c>ReplaceIpsAsync</c>, which was a dangerous
+    /// misnomer because callers may have assumed they were setting full desired state. There is no
+    /// atomic-replace endpoint; build desired state by combining <see cref="AddIpAsync"/> /
+    /// <see cref="RemoveIpAsync"/> on the diff against <see cref="GetAsync"/>.
+    /// </remarks>
+    Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// <c>PUT /v3/ip_pools/{poolId}/delegate</c> — delegate the pool to one subaccount. The subaccount id
@@ -119,7 +127,10 @@ internal sealed class IpPoolsService : IIpPoolsService
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new ArgumentException("Name is required.", nameof(request));
-        // Mailgun's POST /v3/ip_pools takes repeated singular `ip` form fields, not a joined `ips`.
+        // Mailgun documents both `name` AND `description` as required for POST /v3/ip_pools.
+        if (string.IsNullOrWhiteSpace(request.Description))
+            throw new ArgumentException("Description is required.", nameof(request));
+        // POST /v3/ip_pools takes repeated singular `ip` form fields, not a joined `ips`.
         var fb = new FormBuilder().Add("name", request.Name).Add("description", request.Description);
         foreach (var ip in request.Ips)
             fb.Add("ip", ip);
@@ -154,14 +165,14 @@ internal sealed class IpPoolsService : IIpPoolsService
             $"v3/ip_pools/{PathEscape.Segment(poolId)}", query, cancellationToken);
     }
 
-    public Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default)
+    public Task AddIpAsync(string poolId, string ip, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
-        ArgumentNullException.ThrowIfNull(ips);
-        var fb = new FormBuilder();
-        foreach (var ip in ips)
-            fb.Add("ip", ip);
-        return _http.PostFormNoResponseAsync($"v3/ip_pools/{PathEscape.Segment(poolId)}/ips", fb, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(ip);
+        // Mailgun's documented "add single IP" endpoint is PUT (no body), not POST with form.
+        return _http.PutFormNoResponseAsync(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/ips/{PathEscape.Segment(ip)}",
+            new FormBuilder(), cancellationToken);
     }
 
     public Task RemoveIpAsync(string poolId, string ip, CancellationToken cancellationToken = default)
@@ -171,10 +182,14 @@ internal sealed class IpPoolsService : IIpPoolsService
         return _http.DeleteNoResponseAsync($"v3/ip_pools/{PathEscape.Segment(poolId)}/ips/{PathEscape.Segment(ip)}", cancellationToken);
     }
 
-    public Task ReplaceIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default)
+    public Task AddIpsAsync(string poolId, IReadOnlyList<string> ips, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
         ArgumentNullException.ThrowIfNull(ips);
+        if (ips.Count == 0)
+            throw new ArgumentException("At least one IP is required.", nameof(ips));
+        // POST /v3/ip_pools/{poolId}/ips.json with JSON body { ips: [...] } — Mailgun's
+        // "Add multiple IPs" operation. Note: this APPENDS to the pool; it does not replace.
         return _http.PostJsonBodyNoResponseAsync(
             $"v3/ip_pools/{PathEscape.Segment(poolId)}/ips.json",
             new { ips },

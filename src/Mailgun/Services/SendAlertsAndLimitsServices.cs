@@ -4,41 +4,74 @@ using Mailgun.Internal;
 
 namespace Mailgun.Services;
 
-/// <summary>Operations on <c>/v1/thresholds/alerts/send</c> (send-alert thresholds).</summary>
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Send Alerts  (/v1/thresholds/alerts/send)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Operations on <c>/v1/thresholds/alerts/send</c> — CRUD over named send-alert threshold rules.
+/// Each rule fires when a metric crosses a comparator+limit on a dimension, optionally restricted
+/// by filters and notified via one or more alert channels.
+/// </summary>
 public interface ISendAlertsService
 {
-    /// <summary><c>GET /v1/thresholds/alerts/send/config</c> — get current send-alert configuration.</summary>
-    Task<SendAlertConfig> GetConfigAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>GET /v1/thresholds/alerts/send</c> — list every send-alert rule on the account.</summary>
+    Task<SendAlertRuleList> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary><c>PUT /v1/thresholds/alerts/send/config</c> — update send-alert configuration.</summary>
-    Task<SendAlertConfig> UpdateConfigAsync(SendAlertConfig config, CancellationToken cancellationToken = default);
+    /// <summary><c>GET /v1/thresholds/alerts/send/{name}</c> — retrieve a single rule by name.</summary>
+    Task<SendAlertRule> GetAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary><c>GET /v1/thresholds/alerts/send/queues</c> — list send-alert queue states.</summary>
-    Task<SendAlertQueueList> ListQueuesAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>POST /v1/thresholds/alerts/send</c> — create a new send-alert rule.</summary>
+    Task<SendAlertRule> CreateAsync(SendAlertRule rule, CancellationToken cancellationToken = default);
 
-    /// <summary><c>POST /v1/thresholds/alerts/send/queues/pause</c> — pause sending.</summary>
-    Task PauseQueueAsync(string? domain = null, CancellationToken cancellationToken = default);
+    /// <summary><c>PUT /v1/thresholds/alerts/send/{name}</c> — replace a rule.</summary>
+    Task<SendAlertRule> UpdateAsync(string name, SendAlertRule rule, CancellationToken cancellationToken = default);
 
-    /// <summary><c>POST /v1/thresholds/alerts/send/queues/resume</c> — resume sending.</summary>
-    Task ResumeQueueAsync(string? domain = null, CancellationToken cancellationToken = default);
-
-    /// <summary><c>POST /v1/thresholds/alerts/send/queues/clear</c> — clear queued messages.</summary>
-    Task ClearQueueAsync(string? domain = null, CancellationToken cancellationToken = default);
+    /// <summary><c>DELETE /v1/thresholds/alerts/send/{name}</c> — delete a rule.</summary>
+    Task DeleteAsync(string name, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Send-alert configuration record.</summary>
-public sealed class SendAlertConfig
+/// <summary>
+/// A send-alert threshold rule per Mailgun's <c>/v1/thresholds/alerts/send</c> schema.
+/// </summary>
+public sealed class SendAlertRule
 {
-    [JsonPropertyName("bounce_rate")] public double? BounceRate { get; set; }
-    [JsonPropertyName("complaint_rate")] public double? ComplaintRate { get; set; }
-    [JsonPropertyName("auto_pause")] public bool? AutoPause { get; set; }
-    [JsonPropertyName("enabled")] public bool? Enabled { get; set; }
+    /// <summary>User-friendly identifier (required on create). Also the URL segment for item-level operations.</summary>
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+
+    /// <summary>The metric being monitored (required).</summary>
+    [JsonPropertyName("metric")] public string Metric { get; set; } = string.Empty;
+
+    /// <summary>Comparator (required), e.g. <c>gt</c>, <c>gte</c>, <c>lt</c>, <c>lte</c>, <c>eq</c>.</summary>
+    [JsonPropertyName("comparator")] public string Comparator { get; set; } = string.Empty;
+
+    /// <summary>Threshold value (required). String so callers can use either integers or decimals.</summary>
+    [JsonPropertyName("limit")] public string Limit { get; set; } = string.Empty;
+
+    /// <summary>Dimension the metric is grouped/scoped by (required).</summary>
+    [JsonPropertyName("dimension")] public string Dimension { get; set; } = string.Empty;
+
+    /// <summary>Optional dimension filters narrowing where the rule applies.</summary>
+    [JsonPropertyName("filters")] public List<ThresholdFilter>? Filters { get; set; }
+
+    /// <summary>Optional alert channels (e.g. webhook URLs or email addresses Mailgun should notify).</summary>
+    [JsonPropertyName("alert_channels")] public List<string>? AlertChannels { get; set; }
+
+    /// <summary>Optional time-aggregation window, e.g. <c>1h</c>, <c>24h</c>.</summary>
+    [JsonPropertyName("period")] public string? Period { get; set; }
+
+    /// <summary>Free-form description (optional).</summary>
+    [JsonPropertyName("description")] public string? Description { get; set; }
+
+    /// <summary>Server-assigned id (response-only).</summary>
+    [JsonPropertyName("id"), JsonInclude] public string? Id { get; private set; }
 }
 
-/// <summary>Queue state list.</summary>
-public sealed class SendAlertQueueList
+/// <summary>List envelope for send-alert rules.</summary>
+public sealed class SendAlertRuleList
 {
-    [JsonPropertyName("items")] public List<Dictionary<string, object>>? Items { get; init; }
+    [JsonPropertyName("items")] public List<SendAlertRule>? Items { get; init; }
+    [JsonPropertyName("total")] public long? Total { get; init; }
 }
 
 internal sealed class SendAlertsService : ISendAlertsService
@@ -46,75 +79,108 @@ internal sealed class SendAlertsService : ISendAlertsService
     private readonly MailgunHttpClient _http;
     public SendAlertsService(MailgunHttpClient http) => _http = http;
 
-    public Task<SendAlertConfig> GetConfigAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<SendAlertConfig>("v1/thresholds/alerts/send/config", null, cancellationToken);
+    private const string BasePath = "v1/thresholds/alerts/send";
 
-    public Task<SendAlertConfig> UpdateConfigAsync(SendAlertConfig config, CancellationToken cancellationToken = default)
+    public Task<SendAlertRuleList> ListAsync(CancellationToken cancellationToken = default) =>
+        _http.GetJsonAsync<SendAlertRuleList>(BasePath, null, cancellationToken);
+
+    public Task<SendAlertRule> GetAsync(string name, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(config);
-        return _http.PutJsonBodyAsync<SendAlertConfig>("v1/thresholds/alerts/send/config", config, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return _http.GetJsonAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken);
     }
 
-    public Task<SendAlertQueueList> ListQueuesAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<SendAlertQueueList>("v1/thresholds/alerts/send/queues", null, cancellationToken);
-
-    public Task PauseQueueAsync(string? domain = null, CancellationToken cancellationToken = default)
+    public Task<SendAlertRule> CreateAsync(SendAlertRule rule, CancellationToken cancellationToken = default)
     {
-        var fb = new FormBuilder().Add("domain", domain);
-        return _http.PostFormNoResponseAsync("v1/thresholds/alerts/send/queues/pause", fb, cancellationToken);
+        ArgumentNullException.ThrowIfNull(rule);
+        ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
+        return _http.PostJsonBodyAsync<SendAlertRule>(BasePath, rule, cancellationToken);
     }
 
-    public Task ResumeQueueAsync(string? domain = null, CancellationToken cancellationToken = default)
+    public Task<SendAlertRule> UpdateAsync(string name, SendAlertRule rule, CancellationToken cancellationToken = default)
     {
-        var fb = new FormBuilder().Add("domain", domain);
-        return _http.PostFormNoResponseAsync("v1/thresholds/alerts/send/queues/resume", fb, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(rule);
+        ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
+        return _http.PutJsonBodyAsync<SendAlertRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken);
     }
 
-    public Task ClearQueueAsync(string? domain = null, CancellationToken cancellationToken = default)
+    public Task DeleteAsync(string name, CancellationToken cancellationToken = default)
     {
-        var fb = new FormBuilder().Add("domain", domain);
-        return _http.PostFormNoResponseAsync("v1/thresholds/alerts/send/queues/clear", fb, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken);
+    }
+
+    private static void ValidateRequired(string name, string metric, string comparator, string limit, string dimension)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
+        ArgumentException.ThrowIfNullOrWhiteSpace(metric, nameof(metric));
+        ArgumentException.ThrowIfNullOrWhiteSpace(comparator, nameof(comparator));
+        ArgumentException.ThrowIfNullOrWhiteSpace(limit, nameof(limit));
+        ArgumentException.ThrowIfNullOrWhiteSpace(dimension, nameof(dimension));
     }
 }
 
-/// <summary>Operations on <c>/v1/thresholds/limits</c>.</summary>
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Limits  (/v1/thresholds/limits)
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Operations on <c>/v1/thresholds/limits</c> — CRUD over named limit threshold rules.
+/// Same shape as send-alert rules but without <see cref="SendAlertRule.AlertChannels"/>.
+/// </summary>
 public interface ILimitsService
 {
-    /// <summary><c>GET /v1/thresholds/limits</c> — list account limit thresholds.</summary>
-    Task<LimitsConfig> GetAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>GET /v1/thresholds/limits</c> — list every limit rule on the account.</summary>
+    Task<LimitRuleList> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary><c>PUT /v1/thresholds/limits</c> — update account limit thresholds.</summary>
-    Task<LimitsConfig> UpdateAsync(LimitsConfig limits, CancellationToken cancellationToken = default);
+    /// <summary><c>GET /v1/thresholds/limits/{name}</c> — retrieve a single rule by name.</summary>
+    Task<LimitRule> GetAsync(string name, CancellationToken cancellationToken = default);
 
-    /// <summary><c>POST /v1/thresholds/limits/enable</c> — start enforcing limit thresholds.</summary>
-    Task EnableAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>POST /v1/thresholds/limits</c> — create a new limit rule.</summary>
+    Task<LimitRule> CreateAsync(LimitRule rule, CancellationToken cancellationToken = default);
 
-    /// <summary><c>POST /v1/thresholds/limits/disable</c> — stop enforcing limit thresholds.</summary>
-    Task DisableAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>PUT /v1/thresholds/limits/{name}</c> — replace a limit rule.</summary>
+    Task<LimitRule> UpdateAsync(string name, LimitRule rule, CancellationToken cancellationToken = default);
 
-    /// <summary><c>GET /v1/thresholds/limits/usage</c> — current usage against the configured limits.</summary>
-    Task<LimitsUsage> GetUsageAsync(CancellationToken cancellationToken = default);
+    /// <summary><c>DELETE /v1/thresholds/limits/{name}</c> — delete a limit rule.</summary>
+    Task DeleteAsync(string name, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Current usage against the configured send-limit thresholds.</summary>
-public sealed class LimitsUsage
+/// <summary>
+/// A limit threshold rule per Mailgun's <c>/v1/thresholds/limits</c> schema.
+/// </summary>
+public sealed class LimitRule
 {
-    [JsonPropertyName("daily_used")] public long? DailyUsed { get; init; }
-    [JsonPropertyName("daily_remaining")] public long? DailyRemaining { get; init; }
-    [JsonPropertyName("hourly_used")] public long? HourlyUsed { get; init; }
-    [JsonPropertyName("hourly_remaining")] public long? HourlyRemaining { get; init; }
-    [JsonPropertyName("monthly_used")] public long? MonthlyUsed { get; init; }
-    [JsonPropertyName("monthly_remaining")] public long? MonthlyRemaining { get; init; }
-    [JsonPropertyName("enabled")] public bool? Enabled { get; init; }
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("metric")] public string Metric { get; set; } = string.Empty;
+    [JsonPropertyName("comparator")] public string Comparator { get; set; } = string.Empty;
+    [JsonPropertyName("limit")] public string Limit { get; set; } = string.Empty;
+    [JsonPropertyName("dimension")] public string Dimension { get; set; } = string.Empty;
+    [JsonPropertyName("filters")] public List<ThresholdFilter>? Filters { get; set; }
+    [JsonPropertyName("period")] public string? Period { get; set; }
+    [JsonPropertyName("description")] public string? Description { get; set; }
+    [JsonPropertyName("id"), JsonInclude] public string? Id { get; private set; }
 }
 
-/// <summary>Limit threshold configuration.</summary>
-public sealed class LimitsConfig
+/// <summary>List envelope for limit rules.</summary>
+public sealed class LimitRuleList
 {
-    [JsonPropertyName("daily_send_limit")] public long? DailySendLimit { get; set; }
-    [JsonPropertyName("monthly_send_limit")] public long? MonthlySendLimit { get; set; }
-    [JsonPropertyName("hourly_send_limit")] public long? HourlySendLimit { get; set; }
-    [JsonPropertyName("auto_pause_on_breach")] public bool? AutoPauseOnBreach { get; set; }
+    [JsonPropertyName("items")] public List<LimitRule>? Items { get; init; }
+    [JsonPropertyName("total")] public long? Total { get; init; }
+}
+
+/// <summary>Optional dimension filter that narrows a threshold rule's scope.</summary>
+public sealed class ThresholdFilter
+{
+    /// <summary>The dimension the filter applies to (required when the parent <c>filters</c> array is present).</summary>
+    [JsonPropertyName("dimension")] public string Dimension { get; set; } = string.Empty;
+
+    /// <summary>Comparator for the filter (required when the parent <c>filters</c> array is present).</summary>
+    [JsonPropertyName("comparator")] public string Comparator { get; set; } = string.Empty;
+
+    /// <summary>Values to match (required when the parent <c>filters</c> array is present).</summary>
+    [JsonPropertyName("values")] public List<string> Values { get; set; } = new();
 }
 
 internal sealed class LimitsService : ILimitsService
@@ -122,21 +188,44 @@ internal sealed class LimitsService : ILimitsService
     private readonly MailgunHttpClient _http;
     public LimitsService(MailgunHttpClient http) => _http = http;
 
-    public Task<LimitsConfig> GetAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<LimitsConfig>("v1/thresholds/limits", null, cancellationToken);
+    private const string BasePath = "v1/thresholds/limits";
 
-    public Task<LimitsConfig> UpdateAsync(LimitsConfig limits, CancellationToken cancellationToken = default)
+    public Task<LimitRuleList> ListAsync(CancellationToken cancellationToken = default) =>
+        _http.GetJsonAsync<LimitRuleList>(BasePath, null, cancellationToken);
+
+    public Task<LimitRule> GetAsync(string name, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(limits);
-        return _http.PutJsonBodyAsync<LimitsConfig>("v1/thresholds/limits", limits, cancellationToken);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return _http.GetJsonAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", null, cancellationToken);
     }
 
-    public Task EnableAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyNoResponseAsync("v1/thresholds/limits/enable", new { }, cancellationToken);
+    public Task<LimitRule> CreateAsync(LimitRule rule, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
+        return _http.PostJsonBodyAsync<LimitRule>(BasePath, rule, cancellationToken);
+    }
 
-    public Task DisableAsync(CancellationToken cancellationToken = default) =>
-        _http.PostJsonBodyNoResponseAsync("v1/thresholds/limits/disable", new { }, cancellationToken);
+    public Task<LimitRule> UpdateAsync(string name, LimitRule rule, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(rule);
+        ValidateRequired(rule.Name, rule.Metric, rule.Comparator, rule.Limit, rule.Dimension);
+        return _http.PutJsonBodyAsync<LimitRule>($"{BasePath}/{PathEscape.Segment(name)}", rule, cancellationToken);
+    }
 
-    public Task<LimitsUsage> GetUsageAsync(CancellationToken cancellationToken = default) =>
-        _http.GetJsonAsync<LimitsUsage>("v1/thresholds/limits/usage", null, cancellationToken);
+    public Task DeleteAsync(string name, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken);
+    }
+
+    private static void ValidateRequired(string name, string metric, string comparator, string limit, string dimension)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
+        ArgumentException.ThrowIfNullOrWhiteSpace(metric, nameof(metric));
+        ArgumentException.ThrowIfNullOrWhiteSpace(comparator, nameof(comparator));
+        ArgumentException.ThrowIfNullOrWhiteSpace(limit, nameof(limit));
+        ArgumentException.ThrowIfNullOrWhiteSpace(dimension, nameof(dimension));
+    }
 }

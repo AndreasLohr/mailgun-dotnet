@@ -18,34 +18,15 @@ public interface IDkimSecurityService
     Task RotateAsync(string domain, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// <c>GET /v1/dkim_management/domains/{name}/rotation</c> — current auto-rotation policy.
-    /// </summary>
-    Task<DkimAutoRotationPolicy> GetAutoRotationAsync(string domain, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// <c>PUT /v1/dkim_management/domains/{name}/rotation</c> — set the auto-rotation policy
-    /// (enabled / disabled + cadence). Mailgun requires multipart/form-data with form fields
-    /// <c>rotation_enabled</c> and optional <c>rotation_interval</c>.
+    /// (enabled / disabled + cadence). Mailgun requires multipart/form-data with
+    /// <c>rotation_enabled=true|false</c> (required) and optional <c>rotation_interval</c>.
     /// </summary>
-    Task SetAutoRotationAsync(string domain, DkimAutoRotationPolicy policy, CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-/// The auto-rotation policy attached to a domain's DKIM key.
-/// </summary>
-/// <remarks>
-/// Mailgun's wire field for the on/off flag is <c>rotation_enabled</c> (not <c>enabled</c>).
-/// The DTO uses that as the canonical name so it round-trips through both GET and SET. There is
-/// no documented <c>bits</c> field on this endpoint — DKIM key size is set when the key is created
-/// via <see cref="IDkimKeysService.CreateForAuthorityAsync"/>, not on the rotation policy.
-/// </remarks>
-public sealed class DkimAutoRotationPolicy
-{
-    /// <summary>True when Mailgun should automatically rotate the key on the configured cadence.</summary>
-    [JsonPropertyName("rotation_enabled")] public bool? RotationEnabled { get; set; }
-
-    /// <summary>Rotation cadence — minimum allowed interval is <c>5d</c>; common values <c>5d</c>, <c>30d</c>.</summary>
-    [JsonPropertyName("rotation_interval")] public string? RotationInterval { get; set; }
+    /// <param name="domain">The signing domain whose rotation policy is being set.</param>
+    /// <param name="rotationEnabled">Whether Mailgun should auto-rotate. Required field on the wire.</param>
+    /// <param name="rotationInterval">Optional cadence, e.g. <c>5d</c>, <c>30d</c>. Minimum 5 days.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task SetAutoRotationAsync(string domain, bool rotationEnabled, string? rotationInterval = null, CancellationToken cancellationToken = default);
 }
 
 internal sealed class DkimSecurityService : IDkimSecurityService
@@ -62,22 +43,16 @@ internal sealed class DkimSecurityService : IDkimSecurityService
             new FormBuilder(), cancellationToken);
     }
 
-    public Task<DkimAutoRotationPolicy> GetAutoRotationAsync(string domain, CancellationToken cancellationToken = default)
+    public async Task SetAutoRotationAsync(string domain, bool rotationEnabled, string? rotationInterval = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        return _http.GetJsonAsync<DkimAutoRotationPolicy>(
-            $"v1/dkim_management/domains/{PathEscape.Segment(domain)}/rotation", null, cancellationToken);
-    }
-
-    public async Task SetAutoRotationAsync(string domain, DkimAutoRotationPolicy policy, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        ArgumentNullException.ThrowIfNull(policy);
-        // Mailgun documents the endpoint as PUT + multipart/form-data with rotation_enabled (required)
-        // and optional rotation_interval. JSON body is rejected.
+        // Mailgun's PUT /v1/dkim_management/domains/{name}/rotation requires multipart/form-data with
+        // a literal "true"/"false" value for rotation_enabled. The SDK's MultipartBuilder.AddText(bool?)
+        // overload emits Mailgun's general convention ("yes"/"no") which this endpoint rejects, so we
+        // write the string form explicitly.
         using var mp = new MultipartBuilder()
-            .AddText("rotation_enabled", policy.RotationEnabled)
-            .AddText("rotation_interval", policy.RotationInterval);
+            .AddText("rotation_enabled", rotationEnabled ? "true" : "false")
+            .AddText("rotation_interval", rotationInterval);
         await _http.PutMultipartNoResponseAsync(
             $"v1/dkim_management/domains/{PathEscape.Segment(domain)}/rotation", mp, cancellationToken).ConfigureAwait(false);
     }

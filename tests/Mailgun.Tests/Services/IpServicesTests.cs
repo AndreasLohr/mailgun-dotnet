@@ -131,16 +131,19 @@ public class IpServicesTests
     }
 
     [Fact]
-    public async Task IpPools_AddIps_fans_out_each_ip_as_separate_form_field()
+    public async Task IpPools_AddIps_posts_json_body_to_ips_json_subpath()
     {
+        // Mailgun documents POST /v3/ip_pools/{poolId}/ips.json with a JSON body { "ips": [...] }.
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"message\":\"ok\"}");
 
         await client.IpPools.AddIpsAsync("p1", new[] { "1.1.1.1", "2.2.2.2" });
 
         var req = Assert.Single(handler.Requests);
-        Assert.Contains("ip=1.1.1.1", req.Body!, StringComparison.Ordinal);
-        Assert.Contains("ip=2.2.2.2", req.Body!, StringComparison.Ordinal);
+        Assert.Equal(HttpMethod.Post, req.Method);
+        Assert.EndsWith("/v3/ip_pools/p1/ips.json", req.Uri.AbsolutePath);
+        Assert.Equal("application/json", req.ContentType);
+        Assert.Contains("\"ips\":[\"1.1.1.1\",\"2.2.2.2\"]", req.Body!, StringComparison.Ordinal);
     }
 
     // ──────────── DynamicIpPools ────────────

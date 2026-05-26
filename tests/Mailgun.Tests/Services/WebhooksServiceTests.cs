@@ -15,7 +15,7 @@ public class WebhooksServiceTests
             new[] { "https://a", "https://b" });
 
         var req = Assert.Single(handler.Requests);
-        Assert.EndsWith("/v4/domains/mg.example.com/webhooks", req.Uri.AbsolutePath);
+        Assert.EndsWith("/v3/domains/mg.example.com/webhooks", req.Uri.AbsolutePath);
         Assert.Contains("id=delivered", req.Body!, StringComparison.Ordinal);
         Assert.Contains("url=https%3A%2F%2Fa", req.Body!, StringComparison.Ordinal);
         Assert.Contains("url=https%3A%2F%2Fb", req.Body!, StringComparison.Ordinal);
@@ -48,7 +48,7 @@ public class WebhooksServiceTests
 
         var req = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Put, req.Method);
-        Assert.EndsWith("/v4/domains/d/webhooks/opened", req.Uri.AbsolutePath);
+        Assert.EndsWith("/v3/domains/d/webhooks/opened", req.Uri.AbsolutePath);
     }
 
     // ──────────── Modern ID-based account webhooks ────────────
@@ -71,8 +71,10 @@ public class WebhooksServiceTests
     }
 
     [Fact]
-    public async Task ListAccountWebhooks_with_id_filter_passes_repeated_query_params()
+    public async Task ListAccountWebhooks_with_id_filter_passes_single_comma_separated_query_param()
     {
+        // Mailgun documents `webhook_ids` as a single comma-separated query param,
+        // NOT repeated `webhook_ids=a&webhook_ids=b`.
         var (client, handler) = TestMailgunClient.Create();
         handler.EnqueueResponse(HttpStatusCode.OK, "{\"webhooks\":[]}");
 
@@ -80,8 +82,7 @@ public class WebhooksServiceTests
 
         var req = Assert.Single(handler.Requests);
         var q = req.Uri.Query.TrimStart('?');
-        Assert.Contains("webhook_ids=wh1", q, StringComparison.Ordinal);
-        Assert.Contains("webhook_ids=wh2", q, StringComparison.Ordinal);
+        Assert.Contains("webhook_ids=wh1%2Cwh2", q, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -186,8 +187,8 @@ public class WebhooksServiceTests
         Assert.Equal(HttpMethod.Delete, req.Method);
         Assert.EndsWith("/v1/webhooks", req.Uri.AbsolutePath);
         var q = req.Uri.Query.TrimStart('?');
-        Assert.Contains("webhook_ids=a", q, StringComparison.Ordinal);
-        Assert.Contains("webhook_ids=b", q, StringComparison.Ordinal);
+        // Mailgun documents this as a single comma-separated `webhook_ids` query param.
+        Assert.Contains("webhook_ids=a%2Cb", q, StringComparison.Ordinal);
         Assert.DoesNotContain("all=", q, StringComparison.Ordinal);
     }
 

@@ -177,9 +177,7 @@ public class BlankArgumentSweepTests
     {
         var (c, _) = C();
         await Assert.ThrowsAsync<ArgumentException>(() => c.DkimSecurity.RotateAsync(""));
-        await Assert.ThrowsAsync<ArgumentException>(() => c.DkimSecurity.GetAutoRotationAsync(""));
-        await Assert.ThrowsAsync<ArgumentException>(() => c.DkimSecurity.SetAutoRotationAsync("", new()));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => c.DkimSecurity.SetAutoRotationAsync("d", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.DkimSecurity.SetAutoRotationAsync("", true));
     }
 
     // ─── IPs / Pools / Warmups ───
@@ -195,8 +193,10 @@ public class BlankArgumentSweepTests
     public async Task IpPools_extended_validate_blank_segments()
     {
         var (c, _) = C();
-        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.ReplaceIpsAsync("", new[] { "1.1.1.1" }));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => c.IpPools.ReplaceIpsAsync("p", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.AddIpsAsync("", new[] { "1.1.1.1" }));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => c.IpPools.AddIpsAsync("p", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.AddIpAsync("", "1.1.1.1"));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.AddIpAsync("p", ""));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.DelegateAsync("", "a"));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.DelegateAsync("p", ""));
         await Assert.ThrowsAsync<ArgumentException>(() => c.IpPools.ListDelegationsAsync(""));
@@ -284,8 +284,12 @@ public class BlankArgumentSweepTests
     {
         var (c, _) = C();
         await Assert.ThrowsAsync<ArgumentNullException>(() => c.Alerts.UpdateSettingsAsync(null!));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => c.SendAlerts.UpdateConfigAsync(null!));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => c.Limits.UpdateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => c.SendAlerts.CreateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => c.SendAlerts.UpdateAsync("r", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.SendAlerts.UpdateAsync("", new()));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => c.Limits.CreateAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => c.Limits.UpdateAsync("r", null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => c.Limits.UpdateAsync("", new()));
     }
 
     // ─── Messages: SendMime with empty recipient list ───

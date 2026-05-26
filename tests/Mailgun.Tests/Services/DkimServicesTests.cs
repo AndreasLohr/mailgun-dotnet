@@ -226,31 +226,28 @@ public class DkimServicesTests
     }
 
     [Fact]
-    public async Task DkimSecurity_GetAutoRotation_and_SetAutoRotation_hit_documented_paths_and_shape()
+    public async Task DkimSecurity_SetAutoRotation_emits_literal_true_false_and_optional_interval()
     {
-        // GET  /v1/dkim_management/domains/{name}/rotation  — JSON in
-        // PUT  /v1/dkim_management/domains/{name}/rotation  — multipart/form-data with rotation_enabled
+        // PUT /v1/dkim_management/domains/{name}/rotation — multipart/form-data.
+        // Mailgun rejects "yes"/"no" on this endpoint, so the SDK must emit literal "true"/"false".
         var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"rotation_enabled\":true,\"rotation_interval\":\"5d\"}");
+        handler.EnqueueResponse(HttpStatusCode.NoContent, string.Empty);
         handler.EnqueueResponse(HttpStatusCode.NoContent, string.Empty);
 
-        var got = await client.DkimSecurity.GetAutoRotationAsync("mg.example.com");
-        await client.DkimSecurity.SetAutoRotationAsync("mg.example.com", new DkimAutoRotationPolicy
-        {
-            RotationEnabled = false,
-            RotationInterval = "30d",
-        });
+        await client.DkimSecurity.SetAutoRotationAsync("mg.example.com", rotationEnabled: false, rotationInterval: "30d");
+        await client.DkimSecurity.SetAutoRotationAsync("mg.example.com", rotationEnabled: true);
 
-        Assert.True(got.RotationEnabled);
-        Assert.Equal("5d", got.RotationInterval);
-        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.Equal(HttpMethod.Put, handler.Requests[0].Method);
         Assert.EndsWith("/v1/dkim_management/domains/mg.example.com/rotation", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal("multipart/form-data", handler.Requests[0].ContentType);
+        Assert.Contains("rotation_enabled", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("false", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("rotation_interval", handler.Requests[0].Body!, StringComparison.Ordinal);
+        Assert.Contains("30d", handler.Requests[0].Body!, StringComparison.Ordinal);
 
-        Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
-        Assert.EndsWith("/v1/dkim_management/domains/mg.example.com/rotation", handler.Requests[1].Uri.AbsolutePath);
         Assert.Equal("multipart/form-data", handler.Requests[1].ContentType);
         Assert.Contains("rotation_enabled", handler.Requests[1].Body!, StringComparison.Ordinal);
-        Assert.Contains("rotation_interval", handler.Requests[1].Body!, StringComparison.Ordinal);
-        Assert.Contains("30d", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.Contains("true", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.DoesNotContain("rotation_interval", handler.Requests[1].Body!, StringComparison.Ordinal);
     }
 }

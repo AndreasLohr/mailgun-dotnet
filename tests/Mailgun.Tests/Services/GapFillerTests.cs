@@ -142,7 +142,7 @@ public class GapFillerTests
         var w = await client.Webhooks.GetDomainAsync("mg.example.com", "delivered");
 
         var req = Assert.Single(handler.Requests);
-        Assert.EndsWith("/v4/domains/mg.example.com/webhooks/delivered", req.Uri.AbsolutePath);
+        Assert.EndsWith("/v3/domains/mg.example.com/webhooks/delivered", req.Uri.AbsolutePath);
         Assert.Single(w.Webhook.Urls);
     }
 
@@ -156,7 +156,7 @@ public class GapFillerTests
 
         var req = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Delete, req.Method);
-        Assert.EndsWith("/v4/domains/d/webhooks/opened", req.Uri.AbsolutePath);
+        Assert.EndsWith("/v3/domains/d/webhooks/opened", req.Uri.AbsolutePath);
     }
 
     // ── IpPools gaps ──

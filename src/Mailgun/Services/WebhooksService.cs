@@ -12,7 +12,7 @@ internal sealed class WebhooksService : IWebhooksService
     public Task<WebhooksMap> ListDomainAsync(string domain, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
-        return _http.GetJsonAsync<WebhooksMap>($"v4/domains/{PathEscape.Segment(domain)}/webhooks", null, cancellationToken);
+        return _http.GetJsonAsync<WebhooksMap>($"v3/domains/{PathEscape.Segment(domain)}/webhooks", null, cancellationToken);
     }
 
     public Task<WebhookResponse> GetDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default)
@@ -20,7 +20,7 @@ internal sealed class WebhooksService : IWebhooksService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         return _http.GetJsonAsync<WebhookResponse>(
-            $"v4/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", null, cancellationToken);
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", null, cancellationToken);
     }
 
     public Task<WebhookResponse> CreateDomainAsync(string domain, string eventType, IReadOnlyList<string> urls, CancellationToken cancellationToken = default)
@@ -28,7 +28,7 @@ internal sealed class WebhooksService : IWebhooksService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         return _http.PostFormAsync<WebhookResponse>(
-            $"v4/domains/{PathEscape.Segment(domain)}/webhooks",
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks",
             BuildWebhookForm(eventType, urls),
             cancellationToken);
     }
@@ -40,7 +40,7 @@ internal sealed class WebhooksService : IWebhooksService
         var fb = new FormBuilder();
         AddUrls(fb, urls);
         return _http.PutFormAsync<WebhookResponse>(
-            $"v4/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}",
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}",
             fb, cancellationToken);
     }
 
@@ -49,14 +49,16 @@ internal sealed class WebhooksService : IWebhooksService
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);
         ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
         return _http.DeleteNoResponseAsync(
-            $"v4/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", cancellationToken);
+            $"v3/domains/{PathEscape.Segment(domain)}/webhooks/{PathEscape.Segment(eventType)}", cancellationToken);
     }
 
     // ---------- Modern ID-based account-webhook API ----------
 
     public Task<AccountWebhookListResponse> ListAccountWebhooksAsync(IReadOnlyList<string>? webhookIds = null, CancellationToken cancellationToken = default)
     {
-        var q = new QueryBuilder().AddArray("webhook_ids", webhookIds).Build();
+        // Mailgun documents webhook_ids as a single comma-separated query parameter
+        // (e.g. ?webhook_ids=a,b,c) — NOT as repeated webhook_ids=a&webhook_ids=b query params.
+        var q = new QueryBuilder().Add("webhook_ids", JoinIdsOrNull(webhookIds)).Build();
         return _http.GetJsonAsync<AccountWebhookListResponse>("v1/webhooks", q, cancellationToken);
     }
 
@@ -121,11 +123,15 @@ internal sealed class WebhooksService : IWebhooksService
         if (!all && (webhookIds is null || webhookIds.Count == 0))
             throw new ArgumentException("Supply webhookIds or set all=true.", nameof(webhookIds));
 
-        var qb = new QueryBuilder().AddArray("webhook_ids", webhookIds);
+        // Same comma-separated convention as the LIST endpoint — NOT repeated query params.
+        var qb = new QueryBuilder().Add("webhook_ids", JoinIdsOrNull(webhookIds));
         if (all)
             qb.Add("all", "true");
         return _http.DeleteNoResponseAsync("v1/webhooks", qb.Build(), cancellationToken);
     }
+
+    private static string? JoinIdsOrNull(IReadOnlyList<string>? ids) =>
+        ids is null || ids.Count == 0 ? null : string.Join(",", ids);
 
     private static FormBuilder BuildWebhookForm(string eventType, IReadOnlyList<string> urls)
     {

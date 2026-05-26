@@ -60,8 +60,19 @@ public sealed class MailgunResponseMetadata
             return null;
         // Mailgun documents X-RateLimit-Reset as Unix milliseconds. Guard against seconds-form by
         // checking magnitude (anything < year 2001 in millis is almost certainly seconds).
-        if (ms < 1_000_000_000_000L)
-            return DateTimeOffset.FromUnixTimeSeconds(ms);
-        return DateTimeOffset.FromUnixTimeMilliseconds(ms);
+        // DateTimeOffset.FromUnixTime{Seconds,Milliseconds} both throw ArgumentOutOfRangeException
+        // for values outside year 0001..9999, so a malformed-but-long-parseable header (e.g.
+        // X-RateLimit-Reset: 99999999999999) would otherwise crash the metadata-parse path. A
+        // TryParse-named function must not throw; swallow + null.
+        try
+        {
+            return ms < 1_000_000_000_000L
+                ? DateTimeOffset.FromUnixTimeSeconds(ms)
+                : DateTimeOffset.FromUnixTimeMilliseconds(ms);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 }

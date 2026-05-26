@@ -82,7 +82,7 @@ public class NoCoverageKillerTests
 
         var req = Assert.Single(handler.Requests);
         Assert.Equal(HttpMethod.Get, req.Method);
-        Assert.EndsWith("/v4/domains/mg.example.com/webhooks", req.Uri.AbsolutePath);
+        Assert.EndsWith("/v3/domains/mg.example.com/webhooks", req.Uri.AbsolutePath);
         Assert.Equal(2, map.Webhooks.Count);
         Assert.Single(map.Webhooks["delivered"].Urls);
     }

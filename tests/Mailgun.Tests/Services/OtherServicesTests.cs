@@ -250,51 +250,37 @@ public class OtherServicesTests
     }
 
     [Fact]
-    public async Task SendAlerts_GetConfig_UpdateConfig_round_trip_json()
+    public async Task SendAlerts_CRUD_uses_documented_v1_thresholds_alerts_send_resource()
     {
+        // The old /config and /queues/* endpoints don't exist in Mailgun's current API. The real
+        // shape is a CRUD-over-named-rules resource: list/get/create/update/delete by name.
         var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"bounce_rate\":5.0,\"enabled\":true}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"bounce_rate\":7.5,\"enabled\":true}");
+        handler.EnqueueResponse(HttpStatusCode.OK,
+            "{\"items\":[{\"name\":\"bounce-spike\",\"metric\":\"failed_count\",\"comparator\":\"gt\",\"limit\":\"100\",\"dimension\":\"domain\"}],\"total\":1}");
+        handler.EnqueueResponse(HttpStatusCode.OK,
+            "{\"name\":\"new-alert\",\"id\":\"alrt-1\"}");
 
-        var c = await client.SendAlerts.GetConfigAsync();
-        await client.SendAlerts.UpdateConfigAsync(new SendAlertConfig { BounceRate = 7.5, Enabled = true });
+        var list = await client.SendAlerts.ListAsync();
+        await client.SendAlerts.CreateAsync(new SendAlertRule
+        {
+            Name = "new-alert", Metric = "failed_count", Comparator = "gt",
+            Limit = "50", Dimension = "domain",
+        });
 
-        Assert.Equal(5.0, c.BounceRate);
-        Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
-        Assert.Contains("\"bounce_rate\":7.5", handler.Requests[1].Body!, StringComparison.Ordinal);
+        Assert.Single(list.Items!);
+        Assert.Equal(HttpMethod.Get, handler.Requests[0].Method);
+        Assert.EndsWith("/v1/thresholds/alerts/send", handler.Requests[0].Uri.AbsolutePath);
+        Assert.Equal(HttpMethod.Post, handler.Requests[1].Method);
+        Assert.Equal("application/json", handler.Requests[1].ContentType);
+        Assert.EndsWith("/v1/thresholds/alerts/send", handler.Requests[1].Uri.AbsolutePath);
+        Assert.Contains("\"name\":\"new-alert\"", handler.Requests[1].Body!, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task SendAlerts_PauseResumeClear_post_to_queues_subpaths()
+    public async Task SendAlerts_Create_rejects_missing_required_fields()
     {
-        var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{}");
-
-        await client.SendAlerts.PauseQueueAsync("mg.example.com");
-        await client.SendAlerts.ResumeQueueAsync();
-        await client.SendAlerts.ClearQueueAsync();
-
-        Assert.EndsWith("/queues/pause", handler.Requests[0].Uri.AbsolutePath);
-        Assert.EndsWith("/queues/resume", handler.Requests[1].Uri.AbsolutePath);
-        Assert.EndsWith("/queues/clear", handler.Requests[2].Uri.AbsolutePath);
-        Assert.Contains("domain=mg.example.com", handler.Requests[0].Body!, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Limits_Get_Update_use_v1_thresholds_limits()
-    {
-        var (client, handler) = TestMailgunClient.Create();
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"daily_send_limit\":1000}");
-        handler.EnqueueResponse(HttpStatusCode.OK, "{\"daily_send_limit\":2000}");
-
-        var l = await client.Limits.GetAsync();
-        await client.Limits.UpdateAsync(new LimitsConfig { DailySendLimit = 2000 });
-
-        Assert.Equal(1000, l.DailySendLimit);
-        Assert.All(handler.Requests, r => Assert.EndsWith("/v1/thresholds/limits", r.Uri.AbsolutePath));
-        Assert.Equal(HttpMethod.Put, handler.Requests[1].Method);
-        Assert.Contains("\"daily_send_limit\":2000", handler.Requests[1].Body!, StringComparison.Ordinal);
+        var (client, _) = TestMailgunClient.Create();
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.SendAlerts.CreateAsync(new SendAlertRule { Name = "x" /* missing rest */ }));
     }
 }
