@@ -2,28 +2,30 @@
 
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <RootNamespace>Mailgun</RootNamespace>
-    <AssemblyName>Mailgun</AssemblyName>
+    <RootNamespace>Mailgun.MimeKit</RootNamespace>
+    <AssemblyName>Mailgun.MimeKit</AssemblyName>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageId>mailgun-dotnet</PackageId>
-    <Description>A .NET SDK for the Mailgun HTTP API (https://documentation.mailgun.com/). Covers all non-deprecated Mailgun endpoints across v1-v5.</Description>
+    <PackageId>mailgun-dotnet.MimeKit</PackageId>
+    <Description>MimeKit interop for the mailgun-dotnet SDK. Adds a SendMimeAsync(MimeMessage) extension over Mailgun's POST /v3/{domain}/messages.mime endpoint — the only path for S/MIME-signed mail, calendar invites with proper alternative parts, and other rich MIME shapes the form-encoded send endpoint can't represent.</Description>
     <Authors>Andreas Lohr</Authors>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <Copyright>Copyright (c) 2026 Andreas Lohr. All rights reserved.</Copyright>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>mailgun;sdk;email;transactional;api;rest</PackageTags>
+    <PackageTags>mailgun;sdk;email;mime;mimekit;rfc2822;smime</PackageTags>
     <Version>0.9.0</Version>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/AndreasLohr/mailgun-dotnet</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Mailgun\Mailgun.csproj" />
+    <PackageReference Include="MimeKit" Version="4.16.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Mailgun.Tests" />
-    <InternalsVisibleTo Include="Mailgun.Extensions.DependencyInjection" />
-    <InternalsVisibleTo Include="Mailgun.Webhooks" />
-    <InternalsVisibleTo Include="Mailgun.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>

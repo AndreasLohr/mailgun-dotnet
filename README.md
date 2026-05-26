@@ -31,6 +31,7 @@ dotnet add package mailgun-dotnet.Webhooks            # optional: typed webhook 
 dotnet add package mailgun-dotnet.Webhooks.DistributedCache  # optional: IDistributedCache-backed replay protection for multi-instance receivers
 dotnet add package mailgun-dotnet.AspNetCore          # optional: ASP.NET Core webhook endpoint helper
 dotnet add package mailgun-dotnet.Extensions.DependencyInjection  # optional: IServiceCollection.AddMailgun()
+dotnet add package mailgun-dotnet.MimeKit             # optional: SendMimeAsync(MimeMessage) overload for S/MIME, calendar invites, pre-signed RFC-2822
 ```
 
 ## Quick start
@@ -164,6 +165,72 @@ Method conventions:
 - **`.Build()`** returns the underlying `SendMessageRequest` if you want to inspect, store, or send it later via the regular `Messages.SendAsync(domain, request)` overload.
 
 The builder is a convenience layer on top of the DTO — the object-initializer form continues to work and is fully supported.
+
+## Raw MIME sends
+
+Mailgun's form-encoded `/messages` endpoint can't represent every MIME shape — S/MIME-signed mail, calendar invites with proper `multipart/alternative` parts, pre-built DKIM signatures, embedded `message/delivery-status` reports. For those, use the dedicated `/v3/{domain}/messages.mime` endpoint, which accepts a full RFC-2822 message body.
+
+### From raw bytes (no extra dependency)
+
+The core `mailgun-dotnet` package ships a `byte[]` overload:
+
+```csharp
+var rfc2822Bytes = File.ReadAllBytes("signed.eml");
+var resp = await client.Messages.SendMimeAsync(
+    domain: "mg.example.com",
+    to: new[] { "alice@example.com" },
+    mimeMessage: rfc2822Bytes);
+```
+
+The recipient list is the **envelope** `RCPT TO` — distinct from any `To:` header inside the bytes. This is what Mailgun actually delivers to.
+
+### From a `MimeMessage` (optional `mailgun-dotnet.MimeKit` package)
+
+If you build messages with MimeKit (the de-facto MIME library in .NET), install the companion package for a one-line send:
+
+```bash
+dotnet add package mailgun-dotnet.MimeKit
+```
+
+```csharp
+using Mailgun.MimeKit;
+using MimeKit;
+
+var message = new MimeMessage();
+message.From.Add(new MailboxAddress("Sender", "noreply@mg.example.com"));
+message.To.Add(new MailboxAddress("Alice", "alice@example.com"));
+message.Subject = "Calendar invite";
+message.Body = /* multipart/alternative with text + calendar parts */;
+
+await client.Messages.SendMimeAsync("mg.example.com", message);
+```
+
+Envelope recipients are derived from `To` + `Cc` + `Bcc` automatically (case-insensitively deduplicated, first-seen-wins). Pass `envelopeRecipients:` explicitly to override — the legacy-SMTP pattern of BCC'ing audit copies that don't appear in any visible header.
+
+### Migrating from `System.Net.Mail.SmtpClient`
+
+Microsoft formally deprecated `SmtpClient`; the recommended replacement is MimeKit's MailKit / direct MIME construction. The conversion is straightforward — translate the `MailMessage` to a `MimeMessage` once, then send via the SDK:
+
+```csharp
+using MimeKit;
+
+static MimeMessage FromMailMessage(System.Net.Mail.MailMessage src)
+{
+    var m = new MimeMessage();
+    m.From.Add(MailboxAddress.Parse(src.From!.Address));
+    foreach (var to in src.To)   m.To.Add(MailboxAddress.Parse(to.Address));
+    foreach (var cc in src.CC)   m.Cc.Add(MailboxAddress.Parse(cc.Address));
+    foreach (var bcc in src.Bcc) m.Bcc.Add(MailboxAddress.Parse(bcc.Address));
+    m.Subject = src.Subject;
+    m.Body = new TextPart(src.IsBodyHtml ? "html" : "plain") { Text = src.Body };
+    return m;
+}
+
+// Replace `smtp.Send(mailMessage)` with:
+await client.Messages.SendMimeAsync("mg.example.com", FromMailMessage(mailMessage));
+```
+
+Note: the SDK deliberately does **not** ship an `SmtpClient`-shaped shim — `SmtpClient.Send` is synchronous (sync-over-async deadlock risk under load) and exposes properties (`Credentials`, `Host`, `Port`, `EnableSsl`, `DeliveryMethod`) that have no meaning against an HTTP API. An explicit conversion like the snippet above is honest about what's happening.
 
 ## Fluent route builder
 
