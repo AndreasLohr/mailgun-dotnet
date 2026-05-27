@@ -13,3 +13,11 @@ public sealed class SmtpCredential
     public DateTimeOffset? CreatedAt { get; init; }
     [JsonPropertyName("size_bytes")] public long? SizeBytes { get; init; }
 }
+
+/// <summary>Response from <c>DELETE /v3/domains/{domain}/credentials</c> (delete all).</summary>
+public sealed class DeleteAllSmtpCredentialsResponse
+{
+    [JsonPropertyName("message")] public string? Message { get; init; }
+    /// <summary>The number of credentials Mailgun deleted in this call.</summary>
+    [JsonPropertyName("count")] public int Count { get; init; }
+}

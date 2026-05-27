@@ -17,4 +17,10 @@ public interface IKeysService
 
     /// <summary><c>DELETE /v1/keys/{id}</c> — delete an API key.</summary>
     Task DeleteAsync(string keyId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>POST /v1/keys/public</c> — regenerate the account's public API key. The new key is returned
+    /// in the response; the previous key stops working immediately.
+    /// </summary>
+    Task<RegeneratedPublicKey> RegeneratePublicKeyAsync(CancellationToken cancellationToken = default);
 }

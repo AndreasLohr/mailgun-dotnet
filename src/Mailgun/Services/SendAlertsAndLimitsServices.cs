@@ -29,6 +29,41 @@ public interface ISendAlertsService
 
     /// <summary><c>DELETE /v1/thresholds/alerts/send/{name}</c> — delete a rule.</summary>
     Task DeleteAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>GET /v1/thresholds/hits</c> — list every threshold hit recorded against the account
+    /// (both send-alert and limit rules). Each hit captures the rule that fired, the dimension
+    /// value that triggered it, and when it happened.
+    /// </summary>
+    Task<ThresholdHitList> ListHitsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// A single threshold-hit entry per Mailgun's <c>/v1/thresholds/hits</c> response.
+/// </summary>
+public sealed class ThresholdHit
+{
+    [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
+    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
+    [JsonPropertyName("created_at")] public DateTimeOffset? CreatedAt { get; init; }
+    [JsonPropertyName("updated_at")] public DateTimeOffset? UpdatedAt { get; init; }
+    [JsonPropertyName("triggered")] public bool Triggered { get; init; }
+    [JsonPropertyName("expires_at")] public DateTimeOffset? ExpiresAt { get; init; }
+    [JsonPropertyName("latest_value")] public string? LatestValue { get; init; }
+    [JsonPropertyName("metric")] public string? Metric { get; init; }
+    [JsonPropertyName("comparator")] public string? Comparator { get; init; }
+    [JsonPropertyName("limit")] public string? Limit { get; init; }
+    [JsonPropertyName("dimension")] public string? Dimension { get; init; }
+    [JsonPropertyName("dimension_value")] public string? DimensionValue { get; init; }
+    [JsonPropertyName("parent_account_id")] public string? ParentAccountId { get; init; }
+    [JsonPropertyName("subaccount_id")] public string? SubaccountId { get; init; }
+}
+
+/// <summary>List envelope for threshold hits.</summary>
+public sealed class ThresholdHitList
+{
+    [JsonPropertyName("items")] public List<ThresholdHit>? Items { get; init; }
+    [JsonPropertyName("total")] public long? Total { get; init; }
 }
 
 /// <summary>
@@ -115,6 +150,10 @@ internal sealed class SendAlertsService : ISendAlertsService
         return _http.DeleteNoResponseAsync($"{BasePath}/{PathEscape.Segment(name)}", cancellationToken,
             routeTemplate: "v1/thresholds/alerts/send/{name}");
     }
+
+    public Task<ThresholdHitList> ListHitsAsync(CancellationToken cancellationToken = default) =>
+        _http.GetJsonAsync<ThresholdHitList>("v1/thresholds/hits", null, cancellationToken,
+            routeTemplate: "v1/thresholds/hits");
 
     private static void ValidateRequired(string name, string metric, string comparator, string limit, string dimension)
     {

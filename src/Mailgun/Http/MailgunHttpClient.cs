@@ -142,6 +142,14 @@ internal sealed class MailgunHttpClient : IDisposable
     public Task<TResponse> DeleteJsonAsync<TResponse>(string path, CancellationToken ct, string routeTemplate = "") =>
         SendJsonAsync<TResponse>(HttpMethod.Delete, path, query: null, content: null, ct, routeTemplate);
 
+    /// <summary>DELETE with query-string parameters that returns a typed JSON response body.</summary>
+    public Task<TResponse> DeleteJsonAsync<TResponse>(
+        string path,
+        IReadOnlyList<KeyValuePair<string, string?>>? query,
+        CancellationToken ct,
+        string routeTemplate = "") =>
+        SendJsonAsync<TResponse>(HttpMethod.Delete, path, query, content: null, ct, routeTemplate);
+
     public Task DeleteNoResponseAsync(string path, CancellationToken ct, string routeTemplate = "") =>
         SendNoBodyAsync(HttpMethod.Delete, path, query: null, content: null, ct, routeTemplate);
 

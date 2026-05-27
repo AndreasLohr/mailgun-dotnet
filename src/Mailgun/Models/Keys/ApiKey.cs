@@ -41,6 +41,15 @@ public sealed class CreatedApiKey
     [JsonPropertyName("kind")] public string? Kind { get; init; }
 }
 
+/// <summary>Response from <c>POST /v1/keys/public</c> — regenerate the account public API key.</summary>
+public sealed class RegeneratedPublicKey
+{
+    /// <summary>The new account public key.</summary>
+    [JsonPropertyName("key")] public string Key { get; init; } = string.Empty;
+    /// <summary>Server-supplied status message.</summary>
+    [JsonPropertyName("message")] public string? Message { get; init; }
+}
+
 /// <summary>Parameters for <c>POST /v1/keys</c>.</summary>
 public sealed class CreateApiKeyRequest
 {

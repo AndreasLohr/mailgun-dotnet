@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Mailgun.Http;
 using Mailgun.Internal;
+using Mailgun.Pagination;
 using Mailgun.Serialization;
 
 namespace Mailgun.Services;
@@ -49,6 +50,28 @@ public interface IIpPoolsService
     /// as a multipart <c>subaccount_id</c> form field in the request body, NOT a path segment.
     /// </summary>
     Task RevokeDelegationAsync(string poolId, string subaccountId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>GET /v3/ip_pools/{poolId}/domains</c> — list sending domains attached to the pool.
+    /// Page-based cursor pagination: pass <paramref name="limit"/> (default 10, max 500) and
+    /// optionally <paramref name="pageCursor"/> from the previous response's <c>paging.next</c>
+    /// query value.
+    /// </summary>
+    Task<IpPoolDomainsResponse> ListDomainsAsync(string poolId, int? limit = null, string? pageCursor = null, CancellationToken cancellationToken = default);
+}
+
+/// <summary>A sending domain attached to a pool.</summary>
+public sealed class IpPoolDomain
+{
+    [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
+    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
+}
+
+/// <summary>Page of domains attached to a pool, with cursor links.</summary>
+public sealed class IpPoolDomainsResponse
+{
+    [JsonPropertyName("domains")] public List<IpPoolDomain>? Domains { get; init; }
+    [JsonPropertyName("paging")] public PagingLinks? Paging { get; init; }
 }
 
 /// <summary>List of subaccounts a pool is delegated to.</summary>
@@ -229,5 +252,14 @@ internal sealed class IpPoolsService : IIpPoolsService
         await _http.DeleteMultipartNoResponseAsync(
             $"v3/ip_pools/{PathEscape.Segment(poolId)}/delegate", mp, cancellationToken,
             routeTemplate: "v3/ip_pools/{pool_id}/delegate").ConfigureAwait(false);
+    }
+
+    public Task<IpPoolDomainsResponse> ListDomainsAsync(string poolId, int? limit = null, string? pageCursor = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
+        var q = new QueryBuilder().Add("limit", limit).Add("page", pageCursor).Build();
+        return _http.GetJsonAsync<IpPoolDomainsResponse>(
+            $"v3/ip_pools/{PathEscape.Segment(poolId)}/domains", q, cancellationToken,
+            routeTemplate: "v3/ip_pools/{pool_id}/domains");
     }
 }

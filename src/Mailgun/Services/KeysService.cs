@@ -45,4 +45,8 @@ internal sealed class KeysService : IKeysService
         return _http.DeleteNoResponseAsync($"v1/keys/{PathEscape.Segment(keyId)}", cancellationToken,
             routeTemplate: "v1/keys/{key_id}");
     }
+
+    public Task<RegeneratedPublicKey> RegeneratePublicKeyAsync(CancellationToken cancellationToken = default) =>
+        _http.PostJsonBodyAsync<RegeneratedPublicKey>("v1/keys/public", new { }, cancellationToken,
+            routeTemplate: "v1/keys/public");
 }

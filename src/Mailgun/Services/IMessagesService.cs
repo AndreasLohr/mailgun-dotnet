@@ -34,6 +34,17 @@ public interface IMessagesService
     Task DeleteStoredAsync(string domain, string storageKey, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <c>POST /v3/domains/{domain}/messages/{storageKey}</c> — resend a stored message
+    /// to a new set of recipients. The envelope <paramref name="to"/> list overrides whatever
+    /// recipient headers exist inside the stored MIME.
+    /// </summary>
+    Task<SendMessageResponse> ResendStoredAsync(
+        string domain,
+        string storageKey,
+        IReadOnlyList<string> to,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// <c>GET /v3/domains/{domain}/sending_queues</c> — sending queue status for the domain.
     /// </summary>
     Task<SendingQueueStatus> GetSendingQueuesAsync(string domain, CancellationToken cancellationToken = default);

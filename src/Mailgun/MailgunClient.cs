@@ -48,6 +48,7 @@ public sealed class MailgunClient : IMailgunClient, IDisposable, IAsyncDisposabl
     private readonly Lazy<IKeysService> _keys;
     private readonly Lazy<IDkimKeysService> _dkimKeys;
     private readonly Lazy<IDkimSecurityService> _dkimSecurity;
+    private readonly Lazy<IIpAllowlistService> _ipAllowlist;
 
     /// <summary>Initializes a new client with the given API key, defaults for everything else.</summary>
     public MailgunClient(string apiKey)
@@ -90,6 +91,7 @@ public sealed class MailgunClient : IMailgunClient, IDisposable, IAsyncDisposabl
         _keys = new(() => new KeysService(_httpClient), Mode);
         _dkimKeys = new(() => new DkimKeysService(_httpClient), Mode);
         _dkimSecurity = new(() => new DkimSecurityService(_httpClient), Mode);
+        _ipAllowlist = new(() => new IpAllowlistService(_httpClient), Mode);
     }
 
     private readonly bool _ownsHttpClient;
@@ -153,6 +155,8 @@ public sealed class MailgunClient : IMailgunClient, IDisposable, IAsyncDisposabl
     public IDkimKeysService DkimKeys => _dkimKeys.Value;
     /// <inheritdoc />
     public IDkimSecurityService DkimSecurity => _dkimSecurity.Value;
+    /// <inheritdoc />
+    public IIpAllowlistService IpAllowlist => _ipAllowlist.Value;
 
     internal MailgunHttpClient HttpClient => _httpClient;
 

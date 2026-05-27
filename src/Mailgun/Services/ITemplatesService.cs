@@ -14,6 +14,11 @@ public interface ITemplatesService
     /// <summary><c>PUT /v4/templates/{name}</c> — update the description.</summary>
     Task<Template> UpdateAsync(string name, string description, CancellationToken cancellationToken = default);
     Task DeleteAsync(string name, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// <c>DELETE /v4/templates</c> — delete every account-level template in one call. There is no
+    /// confirmation step and no undo on the wire; if you need a safety net, snapshot the list first.
+    /// </summary>
+    Task DeleteAllAsync(CancellationToken cancellationToken = default);
     /// <summary><c>POST /v4/templates/{name}/copy/{targetName}</c>.</summary>
     Task<Template> CopyAsync(string name, string targetName, CancellationToken cancellationToken = default);
     /// <summary><c>PUT /v4/templates/{name}/rename</c>.</summary>

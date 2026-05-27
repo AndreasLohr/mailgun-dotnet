@@ -164,6 +164,15 @@ internal sealed class DomainsService : IDomainsService
             routeTemplate: "v3/domains/{domain}/credentials/{login}");
     }
 
+    public Task<DeleteAllSmtpCredentialsResponse> DeleteAllSmtpCredentialsAsync(string domain, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        return _http.DeleteJsonAsync<DeleteAllSmtpCredentialsResponse>(
+            $"v3/domains/{PathEscape.Segment(domain)}/credentials",
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/credentials");
+    }
+
     public Task UpdateConnectionSettingsAsync(string domain, bool? requireTls = null, bool? skipVerification = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);

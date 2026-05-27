@@ -29,6 +29,14 @@ public interface ISubaccountsService
     Task<SubaccountFeatures> UpdateFeaturesAsync(string subaccountId, SubaccountFeatures features, CancellationToken cancellationToken = default);
     Task<CustomLimit> GetMonthlyCustomLimitAsync(string subaccountId, CancellationToken cancellationToken = default);
     Task SetMonthlyCustomLimitAsync(string subaccountId, long limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>DELETE /v5/accounts/subaccounts</c> — delete the subaccount identified by
+    /// <paramref name="subaccountId"/>. Mailgun identifies the target through the
+    /// <c>X-Mailgun-On-Behalf-Of</c> header (not a path segment); the SDK injects it
+    /// transparently for this call.
+    /// </summary>
+    Task DeleteAsync(string subaccountId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -153,6 +161,17 @@ internal sealed class SubaccountsService : ISubaccountsService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
         return _http.PutJsonBodyNoResponseAsync($"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", new { limit }, cancellationToken, routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/limit/custom/monthly");
+    }
+
+    public Task DeleteAsync(string subaccountId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
+        // Mailgun's contract: subaccount id is conveyed via X-Mailgun-On-Behalf-Of, not the URL.
+        // Derive a one-shot impersonating transport for this single call so the rest of the SDK's
+        // surface (running against the parent account) is unaffected.
+        var impersonated = _http.ForSubaccount(subaccountId);
+        return impersonated.DeleteNoResponseAsync("v5/accounts/subaccounts", cancellationToken,
+            routeTemplate: "v5/accounts/subaccounts");
     }
 }
 

@@ -97,4 +97,7 @@ public interface IMailgunClient
 
     /// <summary>Operations on <c>/v1/dkim_management/{domain}</c> (rotation + auto-rotation).</summary>
     IDkimSecurityService DkimSecurity { get; }
+
+    /// <summary>Operations on <c>/v2/ip_whitelist</c> (account IP allowlist).</summary>
+    IIpAllowlistService IpAllowlist { get; }
 }

@@ -53,6 +53,12 @@ public interface IDomainsService
     /// <summary><c>DELETE /v3/domains/{domain}/credentials/{login}</c> — delete an SMTP credential.</summary>
     Task DeleteSmtpCredentialAsync(string domain, string login, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <c>DELETE /v3/domains/{domain}/credentials</c> — delete every SMTP credential under the domain.
+    /// The response carries the count of credentials Mailgun removed.
+    /// </summary>
+    Task<DeleteAllSmtpCredentialsResponse> DeleteAllSmtpCredentialsAsync(string domain, CancellationToken cancellationToken = default);
+
     /// <summary><c>PUT /v3/domains/{domain}/connection</c> — toggle <c>require_tls</c> / <c>skip_verification</c>.</summary>
     Task UpdateConnectionSettingsAsync(string domain, bool? requireTls = null, bool? skipVerification = null, CancellationToken cancellationToken = default);
 }

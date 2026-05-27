@@ -70,6 +70,9 @@ internal sealed class TemplatesService : ITemplatesService
         return _http.DeleteNoResponseAsync($"v4/templates/{PathEscape.Segment(name)}", cancellationToken, routeTemplate: "v4/templates/{name}");
     }
 
+    public Task DeleteAllAsync(CancellationToken cancellationToken = default) =>
+        _http.DeleteNoResponseAsync("v4/templates", cancellationToken, routeTemplate: "v4/templates");
+
     public async Task<Template> CopyAsync(string name, string targetName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);

@@ -80,6 +80,29 @@ internal sealed class MessagesService : IMessagesService
             routeTemplate: "v3/domains/{domain}/messages/{storage_key}");
     }
 
+    public async Task<SendMessageResponse> ResendStoredAsync(
+        string domain,
+        string storageKey,
+        IReadOnlyList<string> to,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentException.ThrowIfNullOrWhiteSpace(storageKey);
+        ArgumentNullException.ThrowIfNull(to);
+        if (to.Count == 0)
+            throw new ArgumentException("At least one recipient is required.", nameof(to));
+
+        using var mp = new MultipartBuilder();
+        foreach (var t in to)
+            mp.AddText("to", t);
+
+        return await _http.PostMultipartAsync<SendMessageResponse>(
+            $"v3/domains/{PathEscape.Segment(domain)}/messages/{PathEscape.Segment(storageKey)}",
+            mp,
+            cancellationToken,
+            routeTemplate: "v3/domains/{domain}/messages/{storage_key}").ConfigureAwait(false);
+    }
+
     public Task<SendingQueueStatus> GetSendingQueuesAsync(string domain, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(domain);

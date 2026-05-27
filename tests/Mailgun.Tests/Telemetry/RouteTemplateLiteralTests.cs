@@ -43,6 +43,12 @@ public class RouteTemplateLiteralTests
                 if (member.Expression is not IdentifierNameSyntax id) continue;
                 if (id.Identifier.Text != "_http") continue;
 
+                // Skip non-HTTP helpers exposed on MailgunHttpClient — these don't issue requests
+                // and therefore don't carry a routeTemplate. ForSubaccount derives an impersonating
+                // transport (used by Subaccounts.DeleteAsync where the target id is conveyed via
+                // the X-Mailgun-On-Behalf-Of header instead of the URL).
+                if (member.Name.Identifier.Text == "ForSubaccount") continue;
+
                 totalHttpCalls++;
 
                 // Find the named argument `routeTemplate:`. The recipe enforces named-arg form, so

@@ -30,6 +30,33 @@ public interface IWebhooksService
     /// <summary><c>DELETE /v3/domains/{domain}/webhooks/{eventType}</c> — delete a webhook.</summary>
     Task DeleteDomainAsync(string domain, string eventType, CancellationToken cancellationToken = default);
 
+    // ----- v4 URL-keyed domain webhook API -----
+    //
+    // v4 takes the OPPOSITE shape from v3: register one URL for many event types in a single call
+    // (vs v3's one-event-type-with-up-to-3-urls model). Useful when you have a single endpoint that
+    // wants to subscribe to "delivered + opened + clicked" in one shot. The two APIs coexist on the
+    // wire; pick whichever shape better matches your handler topology.
+
+    /// <summary><c>POST /v4/domains/{domain}/webhooks</c> — register one URL for multiple event types.</summary>
+    Task<WebhooksMap> CreateDomainWebhookV4Async(
+        string domain,
+        string url,
+        IReadOnlyList<string> eventTypes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary><c>PUT /v4/domains/{domain}/webhooks</c> — replace the event-type set for an existing URL.</summary>
+    Task<WebhooksMap> UpdateDomainWebhookV4Async(
+        string domain,
+        string url,
+        IReadOnlyList<string> eventTypes,
+        CancellationToken cancellationToken = default);
+
+    /// <summary><c>DELETE /v4/domains/{domain}/webhooks?url=…</c> — unregister one or more URLs.</summary>
+    Task DeleteDomainWebhooksV4Async(
+        string domain,
+        IReadOnlyList<string> urls,
+        CancellationToken cancellationToken = default);
+
     // ----- Modern ID-based account-webhook API (multiple webhooks per event type) -----
     //
     // The historical event-type-keyed methods (ListAccountAsync/GetAccountAsync/CreateAccountAsync

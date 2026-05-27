@@ -56,6 +56,70 @@ internal sealed class WebhooksService : IWebhooksService
             routeTemplate: "v3/domains/{domain}/webhooks/{event_type}");
     }
 
+    // ---------- v4 URL-keyed domain webhook API ----------
+
+    public Task<WebhooksMap> CreateDomainWebhookV4Async(
+        string domain,
+        string url,
+        IReadOnlyList<string> eventTypes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        return _http.PostFormAsync<WebhooksMap>(
+            $"v4/domains/{PathEscape.Segment(domain)}/webhooks",
+            BuildV4Form(url, eventTypes),
+            cancellationToken,
+            routeTemplate: "v4/domains/{domain}/webhooks");
+    }
+
+    public Task<WebhooksMap> UpdateDomainWebhookV4Async(
+        string domain,
+        string url,
+        IReadOnlyList<string> eventTypes,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        return _http.PutFormAsync<WebhooksMap>(
+            $"v4/domains/{PathEscape.Segment(domain)}/webhooks",
+            BuildV4Form(url, eventTypes),
+            cancellationToken,
+            routeTemplate: "v4/domains/{domain}/webhooks");
+    }
+
+    public Task DeleteDomainWebhooksV4Async(
+        string domain,
+        IReadOnlyList<string> urls,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        ArgumentNullException.ThrowIfNull(urls);
+        if (urls.Count == 0)
+            throw new ArgumentException("At least one URL is required.", nameof(urls));
+
+        var qb = new QueryBuilder();
+        foreach (var u in urls)
+            qb.Add("url", u);
+
+        return _http.DeleteNoResponseAsync(
+            $"v4/domains/{PathEscape.Segment(domain)}/webhooks",
+            qb.Build(),
+            cancellationToken,
+            routeTemplate: "v4/domains/{domain}/webhooks");
+    }
+
+    private static FormBuilder BuildV4Form(string url, IReadOnlyList<string> eventTypes)
+    {
+        ArgumentNullException.ThrowIfNull(eventTypes);
+        if (eventTypes.Count == 0)
+            throw new ArgumentException("At least one event type is required.", nameof(eventTypes));
+        var fb = new FormBuilder().Add("url", url);
+        foreach (var et in eventTypes)
+            fb.Add("event_types", et);
+        return fb;
+    }
+
     // ---------- Modern ID-based account-webhook API ----------
 
     public Task<AccountWebhookListResponse> ListAccountWebhooksAsync(IReadOnlyList<string>? webhookIds = null, CancellationToken cancellationToken = default)
