@@ -180,6 +180,14 @@ internal sealed class DomainsService : IDomainsService
         return _http.PutFormNoResponseAsync($"v3/domains/{PathEscape.Segment(domain)}/connection", fb, cancellationToken, routeTemplate: "v3/domains/{domain}/connection");
     }
 
+    public Task<DomainTagLimits> GetTagLimitsAsync(string domain, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(domain);
+        return _http.GetJsonAsync<DomainTagLimits>(
+            $"v3/domains/{PathEscape.Segment(domain)}/limits/tag", query: null, cancellationToken,
+            routeTemplate: "v3/domains/{domain}/limits/tag");
+    }
+
     private static IReadOnlyList<KeyValuePair<string, string?>> BuildListQuery(ListDomainsOptions? options)
     {
         var qb = new QueryBuilder()

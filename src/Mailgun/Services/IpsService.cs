@@ -37,6 +37,43 @@ public interface IIpsService
 
     /// <summary><c>GET /v3/ips/all</c> — all IPs available to the account (dedicated + shared pools).</summary>
     Task<IpsListResponse> ListAllAccountIpsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>DELETE /v3/ips/{ip}/domains</c> — detach the IP from every account domain in one call.
+    /// <paramref name="alternativeIp"/> is required (Mailgun routes affected domains to it during
+    /// the swap).
+    /// </summary>
+    Task<IpsBulkOperationResponse> DetachIpFromAllDomainsAsync(string ip, string alternativeIp, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>GET /v3/ips/details/all</c> — page through every account-assigned IP with full details
+    /// (dedicated + warm-up + reputation). All filter parameters are optional.
+    /// </summary>
+    Task<IpsDetailedListResponse> ListAllDetailedAsync(
+        int? limit = null,
+        int? skip = null,
+        string? poolId = null,
+        string? domainId = null,
+        string? subaccountId = null,
+        string? ip = null,
+        string? sortBy = null,
+        string? sortOrder = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Response wrapper for IP bulk operations like detach-from-all-domains.</summary>
+public sealed class IpsBulkOperationResponse
+{
+    [JsonPropertyName("message")] public string? Message { get; init; }
+    /// <summary>Operation reference id Mailgun emits for tracking async-completed work.</summary>
+    [JsonPropertyName("reference_id")] public string? ReferenceId { get; init; }
+}
+
+/// <summary>Paged response from <c>GET /v3/ips/details/all</c>.</summary>
+public sealed class IpsDetailedListResponse
+{
+    [JsonPropertyName("items")] public List<IpInfo>? Items { get; init; }
+    [JsonPropertyName("total_count")] public long? TotalCount { get; init; }
 }
 
 /// <summary>Mailgun-assigned reputation band for an IP.</summary>
@@ -157,4 +194,39 @@ internal sealed class IpsService : IIpsService
     public Task<IpsListResponse> ListAllAccountIpsAsync(CancellationToken cancellationToken = default) =>
         _http.GetJsonAsync<IpsListResponse>("v3/ips/all", null, cancellationToken,
             routeTemplate: "v3/ips/all");
+
+    public Task<IpsBulkOperationResponse> DetachIpFromAllDomainsAsync(string ip, string alternativeIp, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ip);
+        ArgumentException.ThrowIfNullOrWhiteSpace(alternativeIp);
+        var q = new QueryBuilder().Add("alternative", alternativeIp).Build();
+        return _http.DeleteJsonAsync<IpsBulkOperationResponse>(
+            $"v3/ips/{PathEscape.Segment(ip)}/domains", q, cancellationToken,
+            routeTemplate: "v3/ips/{ip}/domains");
+    }
+
+    public Task<IpsDetailedListResponse> ListAllDetailedAsync(
+        int? limit = null,
+        int? skip = null,
+        string? poolId = null,
+        string? domainId = null,
+        string? subaccountId = null,
+        string? ip = null,
+        string? sortBy = null,
+        string? sortOrder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var q = new QueryBuilder()
+            .Add("limit", limit)
+            .Add("skip", skip)
+            .Add("pool_id", poolId)
+            .Add("domain_id", domainId)
+            .Add("subaccount_id", subaccountId)
+            .Add("ip", ip)
+            .Add("sort_by", sortBy)
+            .Add("sort_order", sortOrder)
+            .Build();
+        return _http.GetJsonAsync<IpsDetailedListResponse>("v3/ips/details/all", q, cancellationToken,
+            routeTemplate: "v3/ips/details/all");
+    }
 }

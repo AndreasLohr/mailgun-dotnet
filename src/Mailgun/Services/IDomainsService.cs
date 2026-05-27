@@ -61,4 +61,10 @@ public interface IDomainsService
 
     /// <summary><c>PUT /v3/domains/{domain}/connection</c> — toggle <c>require_tls</c> / <c>skip_verification</c>.</summary>
     Task UpdateConnectionSettingsAsync(string domain, bool? requireTls = null, bool? skipVerification = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>GET /v3/domains/{domain}/limits/tag</c> — returns the domain's per-tag count cap
+    /// and current count toward that cap.
+    /// </summary>
+    Task<DomainTagLimits> GetTagLimitsAsync(string domain, CancellationToken cancellationToken = default);
 }

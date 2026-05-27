@@ -37,6 +37,46 @@ public interface ISubaccountsService
     /// transparently for this call.
     /// </summary>
     Task DeleteAsync(string subaccountId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>DELETE /v5/accounts/subaccounts/{subaccountId}/limit/custom/monthly</c> — remove the
+    /// subaccount's custom monthly sending limit and revert to the parent-plan default.
+    /// </summary>
+    Task DeleteMonthlyCustomLimitAsync(string subaccountId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>PUT /v5/accounts/subaccounts/{subaccountId}/ip_pool</c> — delegate a dedicated IP pool
+    /// (DIPP) to the subaccount. <paramref name="poolId"/> identifies the pool; the response
+    /// includes Mailgun's async reference id.
+    /// </summary>
+    Task<SubaccountIpPoolDelegationResponse> DelegateIpPoolAsync(string subaccountId, string poolId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>DELETE /v5/accounts/subaccounts/{subaccountId}/ip_pool?pool_id=…</c> — revoke a DIPP
+    /// delegation from the subaccount.
+    /// </summary>
+    Task<SubaccountIpPoolDelegationResponse> RevokeIpPoolDelegationAsync(string subaccountId, string poolId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>GET /v5/accounts/subaccounts/ip_pools/all</c> — list every DIPP delegation across all
+    /// of the parent account's subaccounts.
+    /// </summary>
+    Task<SubaccountIpPoolDelegationsList> ListAllIpPoolDelegationsAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>Response from delegate/revoke DIPP operations on a subaccount.</summary>
+public sealed class SubaccountIpPoolDelegationResponse
+{
+    [JsonPropertyName("message")] public string? Message { get; init; }
+    /// <summary>Operation reference id for async-tracking on Mailgun's side.</summary>
+    [JsonPropertyName("reference_id")] public string? ReferenceId { get; init; }
+}
+
+/// <summary>List response from <c>GET /v5/accounts/subaccounts/ip_pools/all</c>.</summary>
+public sealed class SubaccountIpPoolDelegationsList
+{
+    [JsonPropertyName("items")] public List<Dictionary<string, object>>? Items { get; init; }
+    [JsonPropertyName("total_count")] public long? TotalCount { get; init; }
 }
 
 /// <summary>
@@ -173,6 +213,43 @@ internal sealed class SubaccountsService : ISubaccountsService
         return impersonated.DeleteNoResponseAsync("v5/accounts/subaccounts", cancellationToken,
             routeTemplate: "v5/accounts/subaccounts");
     }
+
+    public Task DeleteMonthlyCustomLimitAsync(string subaccountId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
+        return _http.DeleteNoResponseAsync(
+            $"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/limit/custom/monthly", cancellationToken,
+            routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/limit/custom/monthly");
+    }
+
+    public Task<SubaccountIpPoolDelegationResponse> DelegateIpPoolAsync(string subaccountId, string poolId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
+        // The spec doesn't document a body or query parameter for the pool_id on the PUT
+        // shape — only the DELETE accepts ?pool_id=. We send it as a form field on the PUT body
+        // so Mailgun knows which pool is being delegated; this matches the typical Mailgun pattern
+        // for delegation endpoints (e.g. /v3/ip_pools/{id}/delegate uses a body field).
+        var fb = new FormBuilder().Add("pool_id", poolId);
+        return _http.PutFormAsync<SubaccountIpPoolDelegationResponse>(
+            $"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/ip_pool", fb, cancellationToken,
+            routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/ip_pool");
+    }
+
+    public Task<SubaccountIpPoolDelegationResponse> RevokeIpPoolDelegationAsync(string subaccountId, string poolId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subaccountId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(poolId);
+        var q = new QueryBuilder().Add("pool_id", poolId).Build();
+        return _http.DeleteJsonAsync<SubaccountIpPoolDelegationResponse>(
+            $"v5/accounts/subaccounts/{PathEscape.Segment(subaccountId)}/ip_pool", q, cancellationToken,
+            routeTemplate: "v5/accounts/subaccounts/{subaccount_id}/ip_pool");
+    }
+
+    public Task<SubaccountIpPoolDelegationsList> ListAllIpPoolDelegationsAsync(CancellationToken cancellationToken = default) =>
+        _http.GetJsonAsync<SubaccountIpPoolDelegationsList>(
+            "v5/accounts/subaccounts/ip_pools/all", null, cancellationToken,
+            routeTemplate: "v5/accounts/subaccounts/ip_pools/all");
 }
 
 /// <summary>Operations on <c>/v5/accounts/limit/custom/monthly</c>.</summary>
@@ -182,6 +259,19 @@ public interface ICustomMessageLimitService
     Task SetAsync(long limit, CancellationToken cancellationToken = default);
     Task EnableAsync(CancellationToken cancellationToken = default);
     Task DisableAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>DELETE /v5/accounts/limit/custom/monthly</c> — remove the custom monthly sending limit
+    /// and revert to the plan default.
+    /// </summary>
+    Task DeleteAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>PUT /v5/accounts/limit/custom/enable</c> — re-enable an account that was disabled for
+    /// hitting its custom monthly send limit. Distinct from <see cref="EnableAsync"/> (which
+    /// targets the legacy monthly toggle).
+    /// </summary>
+    Task ReEnableSendingAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Custom monthly message limit.</summary>
@@ -208,6 +298,12 @@ internal sealed class CustomMessageLimitService : ICustomMessageLimitService
 
     public Task DisableAsync(CancellationToken cancellationToken = default) =>
         _http.PostJsonBodyNoResponseAsync("v5/accounts/limit/custom/monthly/disable", new { }, cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly/disable");
+
+    public Task DeleteAsync(CancellationToken cancellationToken = default) =>
+        _http.DeleteNoResponseAsync("v5/accounts/limit/custom/monthly", cancellationToken, routeTemplate: "v5/accounts/limit/custom/monthly");
+
+    public Task ReEnableSendingAsync(CancellationToken cancellationToken = default) =>
+        _http.PutJsonBodyNoResponseAsync("v5/accounts/limit/custom/enable", new { }, cancellationToken, routeTemplate: "v5/accounts/limit/custom/enable");
 }
 
 /// <summary>Operations on <c>/v5/accounts</c>.</summary>
@@ -224,6 +320,13 @@ public interface IAccountService
 
     /// <summary><c>GET /v5/accounts/features</c> — list account feature flags.</summary>
     Task<Dictionary<string, bool>> GetFeaturesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>PUT /v5/accounts/features</c> — update an account feature flag. Mailgun's documented
+    /// surface today exposes <c>webhooks_redact_pii</c> and <c>ai_insights</c>; the SDK does not
+    /// enforce a closed enum so future-Mailgun flags work without an SDK update.
+    /// </summary>
+    Task UpdateFeatureAsync(string flagName, bool value, CancellationToken cancellationToken = default);
 
     /// <summary><c>POST /v5/accounts/resend_activation_email</c> — re-send the activation email.</summary>
     Task ResendActivationEmailAsync(CancellationToken cancellationToken = default);
@@ -280,6 +383,15 @@ internal sealed class AccountService : IAccountService
 
     public Task<Dictionary<string, bool>> GetFeaturesAsync(CancellationToken cancellationToken = default) =>
         _http.GetJsonAsync<Dictionary<string, bool>>("v5/accounts/features", null, cancellationToken, routeTemplate: "v5/accounts/features");
+
+    public Task UpdateFeatureAsync(string flagName, bool value, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(flagName);
+        // Spec models each flag as a form field with `format: json`, i.e. PUT body looks like
+        // `webhooks_redact_pii=true`. Flag name is caller-supplied so future Mailgun flags work.
+        var fb = new FormBuilder().Add(flagName, value);
+        return _http.PutFormNoResponseAsync("v5/accounts/features", fb, cancellationToken, routeTemplate: "v5/accounts/features");
+    }
 
     public Task ResendActivationEmailAsync(CancellationToken cancellationToken = default) =>
         _http.PostJsonBodyNoResponseAsync("v5/accounts/resend_activation_email", new { }, cancellationToken, routeTemplate: "v5/accounts/resend_activation_email");

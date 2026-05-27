@@ -221,7 +221,10 @@ public class GapFillerTests
         await client.DynamicIpPools.GetAsync("dp1");
         await client.DynamicIpPools.UpdateAsync("dp1", new() { Name = "y", SendStrategy = "round_robin" });
 
-        Assert.EndsWith("/v1/dynamic_pools", handler.Requests[0].Uri.AbsolutePath);
+        // v0.9.2: ListAsync moved from v1 → v3 to match Mailgun's documented OpenAPI spec.
+        // GetAsync / UpdateAsync remain on v1 — the v3 surface only exposes /v3/dynamic_pools
+        // (the collection list) and per-pool IP operations, not pool-config CRUD.
+        Assert.EndsWith("/v3/dynamic_pools", handler.Requests[0].Uri.AbsolutePath);
         Assert.EndsWith("/v1/dynamic_pools/dp1", handler.Requests[1].Uri.AbsolutePath);
         Assert.Equal(HttpMethod.Put, handler.Requests[2].Method);
         Assert.Equal("application/json", handler.Requests[2].ContentType);

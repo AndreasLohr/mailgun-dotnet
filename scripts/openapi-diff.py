@@ -45,6 +45,7 @@ SDK_METHOD_TO_VERB = {
     "DeleteNoResponseAsync": "DELETE",
     "DeleteMultipartNoResponseAsync": "DELETE",
     "DeleteJsonBodyNoResponseAsync": "DELETE",
+    "DeleteJsonAsync": "DELETE",
 }
 
 # Pattern: _http.<MethodName>(...) ... routeTemplate: "<template>"
@@ -94,11 +95,14 @@ def load_sdk_callsites() -> list:
             if not m:
                 continue
             template = m.group(1)
-            # Walk backwards up to 25 lines to find _http.<MethodName>(
+            # Walk backwards up to 25 lines to find <Identifier>.<MethodName>(
+            # The handle is usually _http but can also be a local variable created by
+            # _http.ForSubaccount(...) — e.g. SubaccountsService.DeleteAsync uses an
+            # `impersonated` local that wraps the on-behalf-of transport.
             verb = None
             sdk_method = None
             for j in range(i, max(-1, i - 25), -1):
-                hm = re.search(r"_http\.(\w+)\s*[<(]", lines[j])
+                hm = re.search(r"(?:_http|impersonated)\.(\w+)\s*[<(]", lines[j])
                 if hm:
                     sdk_method = hm.group(1)
                     verb = SDK_METHOD_TO_VERB.get(sdk_method)

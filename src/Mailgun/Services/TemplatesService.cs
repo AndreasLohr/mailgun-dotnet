@@ -163,4 +163,68 @@ internal sealed class TemplatesService : ITemplatesService
             $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(tag)}", cancellationToken,
             routeTemplate: "v4/templates/{name}/versions/{tag}");
     }
+
+    public Task<TemplateBatchCopyResponse> BatchCopyAsync(
+        string name,
+        IReadOnlyList<TemplateCopyRequest> targets,
+        IReadOnlyList<string>? sourceVersions = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(targets);
+        if (targets.Count == 0)
+            throw new ArgumentException("At least one copy target is required.", nameof(targets));
+        var body = new { requests = targets, source_versions = sourceVersions };
+        return _http.PutJsonBodyAsync<TemplateBatchCopyResponse>(
+            $"v4/templates/{PathEscape.Segment(name)}/copy", body, cancellationToken,
+            routeTemplate: "v4/templates/{name}/copy");
+    }
+
+    public async Task<Template> RenameByPathAsync(string name, string newName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        // Mailgun's PUT-shape rename — the new name goes in the path, the body is empty.
+        var env = await _http.PutFormAsync<TemplateResponse>(
+            $"v4/templates/{PathEscape.Segment(name)}/rename/{PathEscape.Segment(newName)}",
+            new FormBuilder(), cancellationToken,
+            routeTemplate: "v4/templates/{name}/rename/{new_template_name}").ConfigureAwait(false);
+        return env.Template;
+    }
+
+    public async Task<TemplateVersion> CopyVersionAsync(
+        string name,
+        string sourceVersion,
+        string newVersion,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newVersion);
+        var q = new QueryBuilder().Add("comment", comment).Build();
+        var env = await _http.PutJsonBodyAsync<TemplateResponse>(
+            BuildPathWithQuery(
+                $"v4/templates/{PathEscape.Segment(name)}/versions/{PathEscape.Segment(sourceVersion)}/copy/{PathEscape.Segment(newVersion)}",
+                q),
+            new { },
+            cancellationToken,
+            routeTemplate: "v4/templates/{name}/versions/{version_name}/copy/{new_version_name}").ConfigureAwait(false);
+        return env.Template.Version ?? throw new InvalidOperationException("Mailgun did not return a version object.");
+    }
+
+    private static string BuildPathWithQuery(string path, IReadOnlyList<KeyValuePair<string, string?>> query)
+    {
+        if (query.Count == 0) return path;
+        var sb = new System.Text.StringBuilder(path).Append('?');
+        var first = true;
+        foreach (var kv in query)
+        {
+            if (kv.Value is null) continue;
+            if (!first) sb.Append('&');
+            sb.Append(Uri.EscapeDataString(kv.Key)).Append('=').Append(Uri.EscapeDataString(kv.Value));
+            first = false;
+        }
+        return sb.ToString();
+    }
 }
