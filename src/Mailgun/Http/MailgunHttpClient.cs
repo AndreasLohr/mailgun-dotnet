@@ -25,6 +25,7 @@ internal sealed class MailgunHttpClient : IDisposable
     private readonly string? _onBehalfOf;
     private readonly string? _userAgentSuffix;
     private readonly Action<MailgunResponseMetadata>? _onResponse;
+    private readonly long _maxResponseContentBytes;
 
     public MailgunHttpClient(MailgunClientOptions options)
     {
@@ -33,16 +34,36 @@ internal sealed class MailgunHttpClient : IDisposable
         {
             throw new ArgumentException("MailgunClientOptions.ApiKey is required.", nameof(options));
         }
+        if (options.MaxResponseContentBytes <= 0)
+        {
+            throw new ArgumentException("MailgunClientOptions.MaxResponseContentBytes must be positive.", nameof(options));
+        }
 
         // ResolveBaseUrl always returns a non-blank value because MailgunRegion is a non-nullable
         // enum and the resolver falls through to the Us/Eu defaults when BaseUrl is unset. The
         // earlier "blank ResolveBaseUrl → ArgumentException" guard was dead code with no reachable
         // execution path.
         var resolvedBase = options.ResolveBaseUrl();
-        _baseUrl = new Uri(resolvedBase.TrimEnd('/') + "/");
-        _onBehalfOf = options.OnBehalfOf;
+        var baseUri = new Uri(resolvedBase.TrimEnd('/') + "/");
+        // Refuse to attach the Basic-auth API key over plaintext. ValidatePaginationUrl already
+        // enforces HTTPS for server-supplied links; the primary configured endpoint deserves the
+        // same guard. Loopback is exempt (local testing has no wire), and AllowInsecureBaseUrl is
+        // the explicit opt-out for a trusted self-hosted gateway.
+        if (!baseUri.IsLoopback
+            && !options.AllowInsecureBaseUrl
+            && !string.Equals(baseUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"MailgunClientOptions.BaseUrl must use HTTPS so the API key is not sent in cleartext " +
+                $"(resolved scheme was '{baseUri.Scheme}'). Use a loopback host for local testing, or set " +
+                "MailgunClientOptions.AllowInsecureBaseUrl = true for a trusted self-hosted gateway.",
+                nameof(options));
+        }
+        _baseUrl = baseUri;
+        _onBehalfOf = ValidateOnBehalfOf(options.OnBehalfOf);
         _userAgentSuffix = options.UserAgent;
         _onResponse = options.OnResponse;
+        _maxResponseContentBytes = options.MaxResponseContentBytes;
         _basicAuthHeaderValue = Convert.ToBase64String(Encoding.ASCII.GetBytes($"api:{options.ApiKey}"));
 
         if (options.HttpClient is { } provided)
@@ -52,7 +73,10 @@ internal sealed class MailgunHttpClient : IDisposable
         }
         else
         {
-            HttpMessageHandler handler = new HttpClientHandler();
+            // AllowAutoRedirect = false: the Mailgun API never issues 3xx redirects, and following
+            // one on an auth-bearing client would forward custom headers (X-Mailgun-On-Behalf-Of) to
+            // an attacker-influenced location. The SDK validates pagination links explicitly instead.
+            HttpMessageHandler handler = new HttpClientHandler { AllowAutoRedirect = false };
             handler = new RateLimitHandler(options.MaxRetries) { InnerHandler = handler };
             _httpClient = new HttpClient(handler) { Timeout = options.Timeout };
             _ownsHttpClient = true;
@@ -75,7 +99,31 @@ internal sealed class MailgunHttpClient : IDisposable
         _userAgentSuffix = parent._userAgentSuffix;
         _basicAuthHeaderValue = parent._basicAuthHeaderValue;
         _onResponse = parent._onResponse;
-        _onBehalfOf = onBehalfOf;
+        _maxResponseContentBytes = parent._maxResponseContentBytes;
+        _onBehalfOf = ValidateOnBehalfOf(onBehalfOf);
+    }
+
+    /// <summary>
+    /// Rejects control characters (CR, LF, NUL, …) in a subaccount id / <c>OnBehalfOf</c> value so they
+    /// can never reach the <c>X-Mailgun-On-Behalf-Of</c> header, which is added with
+    /// <see cref="System.Net.Http.Headers.HttpHeaders.TryAddWithoutValidation(string, string?)"/>.
+    /// This closes a header-injection vector when the id is derived from untrusted input (a realistic
+    /// multi-tenant pattern). Modern .NET also rejects such values at send time, but validating at the
+    /// boundary fails fast with a clear error instead of an opaque transport exception.
+    /// </summary>
+    private static string? ValidateOnBehalfOf(string? value)
+    {
+        if (value is null) return null;
+        foreach (var c in value)
+        {
+            if (char.IsControl(c))
+            {
+                throw new ArgumentException(
+                    "Subaccount id (OnBehalfOf) must not contain control characters such as CR or LF.",
+                    nameof(value));
+            }
+        }
+        return value;
     }
 
     /// <summary>
@@ -346,7 +394,15 @@ internal sealed class MailgunHttpClient : IDisposable
                 $"mailgun {request.Method.Method}",
                 System.Diagnostics.ActivityKind.Client);
             activity?.SetTag("http.request.method", request.Method.Method);
-            activity?.SetTag("url.full", request.RequestUri?.ToString());
+            // url.full is REDACTED to the parameterized route template — the same low-cardinality
+            // value the metrics use — so recipient email addresses that appear in suppression paths
+            // (v3/{domain}/bounces/{address}, /complaints/{address}, /unsubscribes/{address}), mailing-
+            // list member paths, and the validate query (?address=) never reach a tracing backend.
+            // Without a template (server-supplied pagination links) we keep scheme/host/path but drop
+            // the query string. See OTel HTTP semconv: sensitive values must be redacted from url.full.
+            if (!string.IsNullOrEmpty(routeTemplate))
+                activity?.SetTag("http.route", routeTemplate);
+            activity?.SetTag("url.full", BuildRedactedUrl(request.RequestUri, routeTemplate));
             activity?.SetTag("server.address", request.RequestUri?.Host);
 
             try
@@ -389,11 +445,7 @@ internal sealed class MailgunHttpClient : IDisposable
                     }
                 }
 
-                // Stryker disable all : HttpClient sets Content to EmptyContent for empty bodies; the null branch is defensive.
-                var raw = response.Content is null
-                    ? string.Empty
-                    : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-                // Stryker restore all
+                var raw = await ReadBodyWithCapAsync(response, cancellationToken).ConfigureAwait(false);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -442,6 +494,64 @@ internal sealed class MailgunHttpClient : IDisposable
                 durationTags.Add("http.response.status_code", sc);
             MailgunMeter.RequestDuration.Record(elapsedSeconds, durationTags);
         }
+    }
+
+    /// <summary>
+    /// Builds a PII-free URL for the <c>url.full</c> span tag. With a route template we substitute the
+    /// fully-parameterized form (e.g. <c>https://api.mailgun.net/v3/{domain}/bounces/{address}</c>);
+    /// without one we keep scheme/host/path but drop the query string (where <c>?address=</c> lives).
+    /// </summary>
+    private static string? BuildRedactedUrl(Uri? uri, string routeTemplate)
+    {
+        if (uri is null)
+            return null;
+        return string.IsNullOrEmpty(routeTemplate)
+            ? $"{uri.Scheme}://{uri.Authority}{uri.AbsolutePath}"
+            : $"{uri.Scheme}://{uri.Authority}/{routeTemplate}";
+    }
+
+    /// <summary>
+    /// Reads the response body into a string, enforcing <see cref="_maxResponseContentBytes"/> so a
+    /// compromised or MITM'd endpoint cannot stream an oversized body to exhaust memory. Rejects early
+    /// when the advertised <c>Content-Length</c> is over the cap, and bounds the streaming read for
+    /// chunked responses that omit it. Mailgun's API is always UTF-8 JSON.
+    /// </summary>
+    private async Task<string> ReadBodyWithCapAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        // Stryker disable once all : HttpClient sets Content to EmptyContent for empty bodies; the null branch is defensive.
+        if (response.Content is null)
+            return string.Empty;
+
+        var cap = _maxResponseContentBytes;
+        if (response.Content.Headers.ContentLength is { } advertised && advertised > cap)
+        {
+            throw new MailgunSerializationException(
+                $"Mailgun response body ({advertised} bytes) exceeds the configured {cap}-byte limit " +
+                "(MailgunClientOptions.MaxResponseContentBytes).");
+        }
+
+        using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var buffer = new MemoryStream();
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(81920);
+        try
+        {
+            int read;
+            while ((read = await stream.ReadAsync(rented.AsMemory(), ct).ConfigureAwait(false)) > 0)
+            {
+                if (buffer.Length + read > cap)
+                {
+                    throw new MailgunSerializationException(
+                        $"Mailgun response body exceeds the configured {cap}-byte limit " +
+                        "(MailgunClientOptions.MaxResponseContentBytes).");
+                }
+                await buffer.WriteAsync(rented.AsMemory(0, read), ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+        }
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private Uri BuildUri(string path, IReadOnlyList<KeyValuePair<string, string?>>? query)

@@ -30,7 +30,28 @@ public sealed class MailgunClientOptions
     /// Optional explicit base URL override. When set, takes precedence over <see cref="Region"/>.
     /// Trailing slash is normalized. Useful for testing or for self-hosted gateways.
     /// </summary>
+    /// <remarks>
+    /// Must use HTTPS unless the host is loopback (<c>localhost</c> / <c>127.0.0.1</c> / <c>::1</c>)
+    /// or <see cref="AllowInsecureBaseUrl"/> is set — otherwise the SDK throws at construction time
+    /// because the Basic-auth API key would be transmitted in cleartext.
+    /// </remarks>
     public string? BaseUrl { get; set; }
+
+    /// <summary>
+    /// Opt-in escape hatch that permits a non-HTTPS, non-loopback <see cref="BaseUrl"/>. Set this to
+    /// <c>true</c> only for a trusted self-hosted gateway you fully control on a private network —
+    /// otherwise the account API key would be sent over plaintext HTTP. Loopback hosts are always
+    /// allowed without this flag. Defaults to <c>false</c>.
+    /// </summary>
+    public bool AllowInsecureBaseUrl { get; set; }
+
+    /// <summary>
+    /// Hard cap, in bytes, on the size of an API response body the SDK will buffer into memory.
+    /// Guards against a compromised or MITM'd endpoint streaming an oversized body to exhaust memory.
+    /// Mailgun's real responses are small JSON payloads; the 64 MiB default leaves generous headroom.
+    /// Enforced whether or not the SDK owns the <see cref="HttpClient"/>. Must be positive.
+    /// </summary>
+    public long MaxResponseContentBytes { get; set; } = 64L * 1024 * 1024;
 
     /// <summary>
     /// HTTP request timeout. Defaults to 100 seconds. Ignored when <see cref="HttpClient"/> is supplied.

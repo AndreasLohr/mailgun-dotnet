@@ -16,10 +16,17 @@ public sealed class MailgunWebhookEndpointOptions
     public TimeSpan MaxClockSkew { get; set; } = MailgunWebhookSignatureValidator.DefaultMaxAge;
 
     /// <summary>
-    /// Optional anti-replay token cache. When supplied, the endpoint rejects requests whose
-    /// signature token has already been seen within <see cref="MaxClockSkew"/>.
+    /// Anti-replay token cache. Rejects requests whose signature token has already been seen within
+    /// <see cref="MaxClockSkew"/>. Defaults to an in-process <see cref="InMemoryWebhookTokenCache"/>
+    /// so replay protection is <strong>on by default</strong> for single-instance receivers.
     /// </summary>
-    public IWebhookTokenCache? TokenCache { get; set; }
+    /// <remarks>
+    /// The in-memory default protects a single process only. Behind more than one instance, swap in a
+    /// distributed cache (see <c>mailgun-dotnet.Webhooks.DistributedCache</c>) so a token replayed
+    /// against a different instance is still caught. Set this to <c>null</c> to disable replay
+    /// protection entirely (not recommended).
+    /// </remarks>
+    public IWebhookTokenCache? TokenCache { get; set; } = new InMemoryWebhookTokenCache();
 
     /// <summary>
     /// Hard cap on the request body size in bytes. Anything larger is rejected with <c>413 Payload Too Large</c>
