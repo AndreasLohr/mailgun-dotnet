@@ -16,6 +16,16 @@ public sealed class MailgunWebhookEndpointOptions
     public TimeSpan MaxClockSkew { get; set; } = MailgunWebhookSignatureValidator.DefaultMaxAge;
 
     /// <summary>
+    /// Which signature field(s) to verify against <see cref="SigningKey"/>. Defaults to
+    /// <see cref="WebhookSignaturePolicy.AcceptEither"/>, which transparently handles both a
+    /// standalone account's own webhooks and (when <see cref="SigningKey"/> is the parent account's
+    /// key) every subaccount's webhooks via their <c>parent-signature</c>. Set to
+    /// <see cref="WebhookSignaturePolicy.ChildSignatureOnly"/> or
+    /// <see cref="WebhookSignaturePolicy.ParentSignatureOnly"/> for stricter scoping.
+    /// </summary>
+    public WebhookSignaturePolicy SignaturePolicy { get; set; } = WebhookSignaturePolicy.AcceptEither;
+
+    /// <summary>
     /// Anti-replay token cache. Rejects requests whose signature token has already been seen within
     /// <see cref="MaxClockSkew"/>. Defaults to an in-process <see cref="InMemoryWebhookTokenCache"/>
     /// so replay protection is <strong>on by default</strong> for single-instance receivers.

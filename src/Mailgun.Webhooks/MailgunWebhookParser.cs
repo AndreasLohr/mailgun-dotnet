@@ -69,6 +69,8 @@ public static class MailgunWebhookParser
                     Timestamp = timestamp,
                     Token = token,
                     Signature = sigValue,
+                    // parent-signature is present only for subaccount-domain events; absent is normal.
+                    ParentSignature = TryReadStringProperty(sig, "parent-signature", out var parent) ? parent : null,
                 };
                 return true;
             }
@@ -124,6 +126,7 @@ public static class MailgunWebhookParser
                     Timestamp = TryReadStringProperty(sig, "timestamp", out var t) ? t : string.Empty,
                     Token = TryReadStringProperty(sig, "token", out var tk) ? tk : string.Empty,
                     Signature = TryReadStringProperty(sig, "signature", out var s) ? s : string.Empty,
+                    ParentSignature = TryReadStringProperty(sig, "parent-signature", out var p) ? p : null,
                 };
             }
         }

@@ -69,4 +69,13 @@ public sealed class WebhookSignature
     [JsonPropertyName("timestamp")] public string Timestamp { get; init; } = string.Empty;
     [JsonPropertyName("token")] public string Token { get; init; } = string.Empty;
     [JsonPropertyName("signature")] public string Signature { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Present only for events originating from a <strong>subaccount</strong> domain: an additional
+    /// HMAC of the same <c>timestamp || token</c> message, signed with the <em>parent</em> account's
+    /// signing key. It lets a parent account verify every subaccount's webhooks with a single key
+    /// instead of tracking one signing key per subaccount. <c>null</c> for ordinary (non-subaccount)
+    /// events. See <see cref="WebhookSignaturePolicy"/>.
+    /// </summary>
+    [JsonPropertyName("parent-signature")] public string? ParentSignature { get; init; }
 }

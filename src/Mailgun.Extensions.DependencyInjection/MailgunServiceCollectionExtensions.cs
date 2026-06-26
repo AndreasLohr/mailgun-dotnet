@@ -101,24 +101,12 @@ public static class MailgunServiceCollectionExtensions
             var factory = sp.GetRequiredService<IHttpClientFactory>();
             var httpClient = factory.CreateClient(HttpClientName);
 
-            // Build the inner client by COPYING from the configured options, then overriding the
-            // HttpClient with the named factory client. Every field on MailgunClientOptions must
-            // be copied — most importantly OnResponse, which an earlier version of this extension
-            // silently dropped (the callback was registered via configureOptions but never reached
-            // MailgunHttpClient.ctor because this projection didn't propagate it).
-            var clientOptions = new MailgunClientOptions
-            {
-                ApiKey = opts.ApiKey,
-                Region = opts.Region,
-                BaseUrl = opts.BaseUrl,
-                Timeout = opts.Timeout,
-                HttpClient = httpClient,
-                MaxRetries = opts.MaxRetries,
-                UserAgent = opts.UserAgent,
-                OnBehalfOf = opts.OnBehalfOf,
-                OnResponse = opts.OnResponse,
-            };
-            return new MailgunClient(clientOptions);
+            // Clone ALL configured options and override only the transport with the named factory
+            // client. This used to be a hand-maintained field-by-field projection that silently
+            // dropped options as they were added (OnResponse, then AllowInsecureBaseUrl and
+            // MaxResponseContentBytes). CloneWithHttpClient uses MemberwiseClone, so no option can
+            // ever be forgotten here again. See OptionsParityTests for the guard.
+            return new MailgunClient(opts.CloneWithHttpClient(httpClient));
         });
 
         services.TryAddSingleton<IMailgunClient>(sp => sp.GetRequiredService<MailgunClient>());

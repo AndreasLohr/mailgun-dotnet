@@ -200,6 +200,31 @@ public class SecurityHardeningTests
             new MailgunClient(new MailgunClientOptions { ApiKey = "k", MaxResponseContentBytes = 0 }));
     }
 
+    // ── #5 owned handler disables auto-redirect + bounds connection lifetime ──────────────────
+
+    [Fact]
+    public void Owned_primary_handler_disables_auto_redirect()
+    {
+        var handler = MailgunHttpClient.CreateOwnedPrimaryHandler(new MailgunClientOptions { ApiKey = "k" });
+        Assert.False(handler.AllowAutoRedirect);
+    }
+
+    [Fact]
+    public void Owned_primary_handler_applies_configured_pooled_connection_lifetime()
+    {
+        var lifetime = TimeSpan.FromMinutes(7);
+        var handler = MailgunHttpClient.CreateOwnedPrimaryHandler(
+            new MailgunClientOptions { ApiKey = "k", PooledConnectionLifetime = lifetime });
+        Assert.Equal(lifetime, handler.PooledConnectionLifetime);
+    }
+
+    [Fact]
+    public void Owned_primary_handler_defaults_pooled_connection_lifetime_to_two_minutes()
+    {
+        var handler = MailgunHttpClient.CreateOwnedPrimaryHandler(new MailgunClientOptions { ApiKey = "k" });
+        Assert.Equal(TimeSpan.FromMinutes(2), handler.PooledConnectionLifetime);
+    }
+
     // ── #6a webhook anti-replay default ───────────────────────────────────────────────────────
 
     [Fact]
@@ -215,6 +240,14 @@ public class SecurityHardeningTests
     {
         var options = new MailgunWebhookEndpointOptions { TokenCache = null };
         Assert.Null(options.TokenCache);
+    }
+
+    [Fact]
+    public void Webhook_endpoint_options_default_signature_policy_is_accept_either()
+    {
+        // AcceptEither is backward-compatible for non-subaccount payloads and transparently handles
+        // subaccount parent-signature verification when configured with the parent key.
+        Assert.Equal(WebhookSignaturePolicy.AcceptEither, new MailgunWebhookEndpointOptions().SignaturePolicy);
     }
 
     private static (ActivityListener listener, System.Collections.Concurrent.ConcurrentBag<Activity> bag, string tag) RegisterListener()

@@ -73,15 +73,32 @@ internal sealed class MailgunHttpClient : IDisposable
         }
         else
         {
-            // AllowAutoRedirect = false: the Mailgun API never issues 3xx redirects, and following
-            // one on an auth-bearing client would forward custom headers (X-Mailgun-On-Behalf-Of) to
-            // an attacker-influenced location. The SDK validates pagination links explicitly instead.
-            HttpMessageHandler handler = new HttpClientHandler { AllowAutoRedirect = false };
+            HttpMessageHandler handler = CreateOwnedPrimaryHandler(options);
             handler = new RateLimitHandler(options.MaxRetries) { InnerHandler = handler };
             _httpClient = new HttpClient(handler) { Timeout = options.Timeout };
             _ownsHttpClient = true;
         }
     }
+
+    /// <summary>
+    /// Builds the primary handler for the SDK-owned transport (the branch taken only when the caller
+    /// does not supply their own <see cref="HttpClient"/>).
+    /// </summary>
+    /// <remarks>
+    /// <para><c>SocketsHttpHandler</c> with a bounded <c>PooledConnectionLifetime</c>: the owned client
+    /// is a process-lifetime singleton, and a bare <see cref="HttpClient"/> pools sockets forever, so
+    /// it never observes DNS changes after a Mailgun failover. Recycling pooled connections on the
+    /// configured cadence fixes that without paying for a new connection per request.</para>
+    /// <para><c>AllowAutoRedirect = false</c>: the Mailgun API never issues 3xx redirects, and following
+    /// one on an auth-bearing client would forward custom headers (<c>X-Mailgun-On-Behalf-Of</c>) to an
+    /// attacker-influenced location. The SDK validates pagination links explicitly instead.</para>
+    /// </remarks>
+    internal static SocketsHttpHandler CreateOwnedPrimaryHandler(MailgunClientOptions options) =>
+        new()
+        {
+            AllowAutoRedirect = false,
+            PooledConnectionLifetime = options.PooledConnectionLifetime,
+        };
 
     /// <summary>
     /// Creates a derived client that shares this client's HttpClient transport, but rewrites

@@ -59,6 +59,23 @@ public sealed class MailgunClientOptions
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(100);
 
     /// <summary>
+    /// How long a pooled connection may be reused before the SDK-owned transport recycles it.
+    /// Defaults to 2 minutes (matching <c>IHttpClientFactory</c>'s default handler lifetime).
+    /// </summary>
+    /// <remarks>
+    /// The SDK's owned <see cref="HttpClient"/> is intended to live for the whole process (it is the
+    /// DI singleton's fallback transport and the recommended console-app pattern). A bare long-lived
+    /// <c>HttpClient</c> pools sockets indefinitely and never observes DNS changes — the classic
+    /// "my client keeps hitting the retired IP after failover" bug. The SDK therefore builds its owned
+    /// transport on <see cref="System.Net.Http.SocketsHttpHandler"/> with
+    /// <see cref="System.Net.Http.SocketsHttpHandler.PooledConnectionLifetime"/> set to this value, so
+    /// connections are refreshed periodically without the cost of a new connection per request.
+    /// Ignored when <see cref="HttpClient"/> is supplied (the caller, or <c>IHttpClientFactory</c>,
+    /// owns lifetime in that case).
+    /// </remarks>
+    public TimeSpan PooledConnectionLifetime { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>
     /// Optional caller-owned <see cref="System.Net.Http.HttpClient"/>. When supplied the SDK does not
     /// dispose it. Otherwise the SDK constructs and owns an internal <see cref="System.Net.Http.HttpClient"/>.
     /// </summary>
@@ -100,4 +117,25 @@ public sealed class MailgunClientOptions
         !string.IsNullOrWhiteSpace(BaseUrl)
             ? BaseUrl
             : Region == MailgunRegion.Eu ? EuBaseUrl : UsBaseUrl;
+
+    /// <summary>
+    /// Returns a shallow copy of these options with <see cref="HttpClient"/> overridden by
+    /// <paramref name="httpClient"/>. The DI registration uses this to hand the SDK an
+    /// <c>IHttpClientFactory</c>-managed transport while preserving every configured option.
+    /// </summary>
+    /// <remarks>
+    /// Implemented with <see cref="object.MemberwiseClone"/> so <strong>every</strong> option — current
+    /// and future — is carried over automatically. An earlier hand-maintained field list silently
+    /// dropped <c>OnResponse</c>, then <c>AllowInsecureBaseUrl</c> and <c>MaxResponseContentBytes</c>;
+    /// cloning makes that class of bug structurally impossible. All option fields are value types or
+    /// immutable/by-reference values (delegates, the supplied <see cref="HttpClient"/>) for which a
+    /// shallow copy is the correct semantic.
+    /// </remarks>
+    internal MailgunClientOptions CloneWithHttpClient(HttpClient httpClient)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        var clone = (MailgunClientOptions)MemberwiseClone();
+        clone.HttpClient = httpClient;
+        return clone;
+    }
 }

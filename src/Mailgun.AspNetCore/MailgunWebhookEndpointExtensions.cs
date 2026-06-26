@@ -12,9 +12,11 @@ public static class MailgunWebhookEndpointExtensions
 {
     /// <summary>
     /// Maps a Mailgun webhook receiver at the given <paramref name="pattern"/>. The endpoint:
-    /// (1) reads the JSON body, (2) verifies the HMAC-SHA256 signature, (3) enforces the
-    /// configured clock-skew window, (4) optionally checks the replay token cache,
-    /// (5) parses to a typed <see cref="MailgunWebhookEvent"/> and invokes <paramref name="handler"/>.
+    /// (1) reads the JSON body, (2) verifies the HMAC-SHA256 signature per
+    /// <see cref="MailgunWebhookEndpointOptions.SignaturePolicy"/> (supporting subaccount
+    /// <c>parent-signature</c> verification), (3) enforces the configured clock-skew window,
+    /// (4) checks the replay token cache (on by default), (5) parses to a typed
+    /// <see cref="MailgunWebhookEvent"/> and invokes <paramref name="handler"/>.
     /// Returns 200 on success, 401 on invalid signature, 409 on replay, 400 on parse failure.
     /// </summary>
     public static IEndpointConventionBuilder MapMailgunWebhook(
@@ -56,6 +58,7 @@ public static class MailgunWebhookEndpointExtensions
 
             var valid = MailgunWebhookSignatureValidator.IsValid(
                 options.SigningKey, sig.Timestamp, sig.Token, sig.Signature,
+                sig.ParentSignature, options.SignaturePolicy,
                 options.MaxClockSkew);
             if (!valid)
             {

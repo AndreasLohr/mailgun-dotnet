@@ -117,6 +117,27 @@ public class MailgunWebhookSignatureValidatorTests
         Assert.False(MailgunWebhookSignatureValidator.IsValid(signingKey, timestamp, "tok-中", sigForQuestionMarkToken));
     }
 
+    [Fact]
+    public void Signature_of_wrong_length_returns_false_without_throwing()
+    {
+        // The fixed-time comparison short-circuits on a length mismatch before FixedTimeEquals
+        // (which requires equal-length spans). A truncated or oversized signature must cleanly
+        // return false, never throw.
+        var (ts, token, _) = ComputeSignature(SigningKey, secondsAgo: 5);
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(SigningKey, ts, token, "deadbeef")); // too short
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(SigningKey, ts, token, new string('a', 128))); // too long
+        Assert.False(MailgunWebhookSignatureValidator.IsValid(SigningKey, ts, token, "")); // empty
+    }
+
+    [Fact]
+    public void Signature_comparison_is_case_and_whitespace_insensitive()
+    {
+        // Mailgun emits lowercase hex; the validator trims + lowercases the candidate before the
+        // fixed-time compare, so an upper-cased or padded signature still verifies.
+        var (ts, token, sig) = ComputeSignature(SigningKey, secondsAgo: 5);
+        Assert.True(MailgunWebhookSignatureValidator.IsValid(SigningKey, ts, token, "  " + sig.ToUpperInvariant() + "  "));
+    }
+
     private static (string Timestamp, string Token, string Signature) ComputeSignature(string key, int secondsAgo)
     {
         var ts = DateTimeOffset.UtcNow.AddSeconds(-secondsAgo).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
