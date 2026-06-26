@@ -615,7 +615,7 @@ dotnet stryker
 
 The HTML report lands in `StrykerOutput/<timestamp>/reports/mutation-report.html`. Configuration is in [stryker-config.json](./stryker-config.json).
 
-The test suite is currently **638 tests** (net8.0 + net10.0). The mutation-score figures below are from the last full Stryker run captured in the progression table; the score moves as the SDK's code surface and the survivor-triage passes evolve, so treat the live [dashboard badge](https://dashboard.stryker-mutator.io/reports/github.com/AndreasLohr/mailgun-dotnet/main) at the top of this README as the source of truth and re-run `dotnet stryker` after substantial changes.
+The test suite is currently **638 tests** (net8.0 + net10.0). Latest full Stryker run: **63.1% overall mutation score** (1358 killed / 786 survived / 10 not-covered / 5 timeout out of 2159 reached), **63.4% covered-code kill rate**. The score has held roughly flat across the v0.9.x releases because the test suite and the code surface (subaccount + dynamic-pool + alerts endpoints, security hardening, parent-signature) grew in step; a dedicated survivor-triage pass — the pattern that lifted earlier rounds — is the lever to push it back above 75%. Treat the live [dashboard badge](https://dashboard.stryker-mutator.io/reports/github.com/AndreasLohr/mailgun-dotnet/main) at the top of this README as the source of truth and re-run `dotnet stryker` after substantial changes.
 
 - **4 real bugs found and fixed during earlier survivor-by-survivor triage**: `Templates.CreateVersionAsync`, `InboxPlacement.CreateSeedlistAsync` / `CreateTestAsync`, `DynamicIpPools.CreateAsync`, and `Users.CreateAsync` were all missing required-field validation on their typed request DTOs (an empty `Name` / `Email` / `Tag` / `Seedlist` would have been sent to Mailgun as an empty string instead of throwing `ArgumentException` at the call site).
 
@@ -632,6 +632,7 @@ Progression — each round expanded test coverage and reran Stryker:
 | + survivor triage: 4 bug fixes + blank-arg sweep + HTTP-client behavior + exact-retry-count tests | 305 | 979 | 283 | 73 | 73.9% |
 | + high-ROI NoCoverage killers: dead-code purge, missing `ListAllAsync` coverage, OpenTelemetry `ActivityListener` tests | 311 | 993 | 290 | 38 | 75.4% |
 | **v0.8.x feature snapshot** — OpenTelemetry metrics surface, distributed-cache replay protection, webhook crypto / multipart-copy hardening, Roslyn cardinality guardrail. New code surface added faster than survivor triage caught up; awaiting a dedicated triage round | 445 | 1143 | 592 | 77 | 63.2% |
+| **v0.9.x feature + hardening snapshot** — ~50 new endpoints (subaccount DIPP, dynamic IP pools v3, alerts settings, bounce-classification, …), the security review fixes (PII-redacted traces, HTTPS enforcement, response cap, CR/LF guard), DI options-parity fix, connection-lifetime, and subaccount `parent-signature`. Test suite grew 445 → 638 in step with the code surface; score held flat, NoCoverage cut to 10 | 638 | 1358 | 786 | 10 | 63.1% |
 
 ## Target frameworks & support matrix
 
