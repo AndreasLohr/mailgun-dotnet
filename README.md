@@ -17,10 +17,10 @@ A .NET SDK for the <a href="https://documentation.mailgun.com/" target="_blank" 
 - **Built-in retries** — `X-RateLimit-Reset`-aware backoff for 429 (with `Retry-After` fallback), plus idempotent-only 5xx retry (POSTs aren't replayed on 5xx).
 - **Structured exceptions** — `MailgunApiException` exposes the HTTP status, parsed message + details, `X-Mailgun-Request-Id`, and rate-limit headers. `MailgunRateLimitException` is a distinct subtype for catch-block branching.
 - **DI-friendly** — opt-in `mailgun-dotnet.Extensions.DependencyInjection` package wires `IMailgunClient` through <a href="https://learn.microsoft.com/dotnet/core/extensions/httpclient-factory" target="_blank" rel="noopener noreferrer"><code>IHttpClientFactory</code></a>. The core package has zero `Microsoft.Extensions.*` dependencies so it runs in console apps, AWS Lambda, Azure Functions, Unity, etc.
-- **Typed webhook receiver** — opt-in `mailgun-dotnet.Webhooks` + `mailgun-dotnet.AspNetCore` companion packages. Parses Mailgun's 8 event types into strongly-typed events, verifies <a href="https://en.wikipedia.org/wiki/HMAC" target="_blank" rel="noopener noreferrer">HMAC-SHA256</a> signatures with constant-time compare and an optional anti-replay token cache, and ships a one-line `MapMailgunWebhook` endpoint helper.
+- **Typed webhook receiver** — opt-in `mailgun-dotnet.Webhooks` + `mailgun-dotnet.AspNetCore` companion packages. Parses Mailgun's 8 event types into strongly-typed events, verifies <a href="https://en.wikipedia.org/wiki/HMAC" target="_blank" rel="noopener noreferrer">HMAC-SHA256</a> signatures with constant-time compare, enforces timestamp freshness, ships **replay protection on by default**, supports subaccount `parent-signature` verification, and exposes a one-line `MapMailgunWebhook` endpoint helper.
 - **<a href="https://opentelemetry.io" target="_blank" rel="noopener noreferrer">OpenTelemetry</a>-native tracing + metrics** — `MailgunActivitySource` emits a client span per HTTP call; `MailgunMeter` emits `mailgun.client.*` instruments (request duration histogram, retries / errors counters, active-requests gauge) tagged with route templates so per-endpoint dashboards stay low-cardinality. Both share the name `"Mailgun"`. Zero NuGet dependencies, zero cost when no listener is attached.
-- **Mutation-tested** — Stryker.NET is wired as a local tool. Current baseline: 75.4% overall mutation score, ~77% covered-code kill rate (see [Mutation testing](#mutation-testing) for the round-by-round table).
-- **Multi-target** — `net8.0` and `net10.0`.
+- **Mutation-tested** — Stryker.NET is wired as a local tool and the score is published to the [dashboard badge](https://dashboard.stryker-mutator.io/reports/github.com/AndreasLohr/mailgun-dotnet/main) above (see [Mutation testing](#mutation-testing) for the round-by-round history). 638 tests across `net8.0` + `net10.0`.
+- **Multi-target** — `net8.0` (LTS) and `net10.0`. See [Target frameworks & support matrix](#target-frameworks--support-matrix).
 
 ## Install
 
@@ -341,6 +341,14 @@ dotnet add package mailgun-dotnet.AspNetCore   # optional: only if you want the 
 
 Mailgun signs every webhook with HMAC-SHA256 over `timestamp + token`; the SDK verifies it with a constant-time compare and rejects timestamps outside a configurable clock-skew window (default 15 minutes).
 
+**Security model at a glance:**
+
+- **Signature** — `signature == HMAC-SHA256(signing_key, timestamp + token)`, compared with `CryptographicOperations.FixedTimeEquals` (no early-exit timing leak). An empty signing key throws rather than computing a forgeable digest from public inputs.
+- **Timestamp freshness** — the signature timestamp must be within `MaxClockSkew` of now (default 15 minutes), so a captured-but-stale request is rejected even if its HMAC is valid. Out-of-range timestamps return `false`, never throw.
+- **Replay protection** — **on by default**: `MailgunWebhookEndpointOptions.TokenCache` defaults to an in-process `InMemoryWebhookTokenCache`, so a token replayed within the clock-skew window is rejected (409). Single-process only — see [Replay protection across multiple instances](#replay-protection-across-multiple-instances) for the distributed cache. Set `TokenCache = null` to disable (not recommended).
+- **Subaccount `parent-signature`** — payloads from a subaccount domain also carry a `parent-signature` (the same message signed with the *parent* account's key). The default `SignaturePolicy = WebhookSignaturePolicy.AcceptEither` verifies whichever signature matches your configured key, so a parent account can validate every subaccount's webhooks with **one** signing key. See [Subaccount webhooks](#subaccount-webhooks-parent-signature).
+- **Body size cap** — the endpoint helper rejects bodies larger than `MaxRequestBytes` (default 256 KB) with 413 before reading or parsing them.
+
 ### Raw (any framework)
 
 ```csharp
@@ -385,17 +393,50 @@ app.MapMailgunWebhook("/webhooks/mailgun",
     {
         SigningKey   = builder.Configuration["Mailgun:HttpSigningKey"]!,
         MaxClockSkew = TimeSpan.FromMinutes(15),
-        TokenCache   = new InMemoryWebhookTokenCache(),   // optional: anti-replay
+        // TokenCache defaults to an InMemoryWebhookTokenCache (replay protection is ON by default);
+        // SignaturePolicy defaults to AcceptEither (handles subaccount parent-signatures).
     },
     async (evt, ctx, ct) =>
     {
         // evt is a typed MailgunWebhookEvent (e.g. DeliveredEvent, ClickedEvent).
-        // The endpoint already verified the signature + token freshness; just handle it.
+        // The endpoint already verified the signature + freshness + replay; just handle it.
         await HandleEvent(evt, ct);
     });
 ```
 
 The helper returns 200 on success, 401 on invalid signature or stale timestamp, 409 on replay-cache hit, 400 on malformed JSON.
+
+### Subaccount webhooks (parent-signature)
+
+When a webhook fires for a domain owned by a **subaccount**, Mailgun's signature object includes an extra `parent-signature` field — the same `timestamp + token` message signed with the **parent account's** signing key, in addition to the subaccount-keyed `signature`. This lets a parent account verify every subaccount's webhooks with a single signing key instead of tracking one key per subaccount.
+
+The endpoint helper handles this automatically: with the default `SignaturePolicy = WebhookSignaturePolicy.AcceptEither`, configuring the helper with your **parent** signing key validates both your own domains' webhooks (via `signature`) and all subaccount webhooks (via `parent-signature`), with no behavioral change for non-subaccount payloads (which carry no parent signature).
+
+```csharp
+app.MapMailgunWebhook("/webhooks/mailgun",
+    new MailgunWebhookEndpointOptions
+    {
+        SigningKey      = builder.Configuration["Mailgun:ParentHttpSigningKey"]!, // parent account key
+        SignaturePolicy = WebhookSignaturePolicy.AcceptEither,                    // default — shown for clarity
+    },
+    async (evt, ctx, ct) => await HandleEvent(evt, ct));
+```
+
+Verifying raw (any framework) — pass the parsed `parent-signature` and a policy to the validator:
+
+```csharp
+var sig = evt.Signature!;  // or MailgunWebhookParser.TryExtractSignature(bodyBytes, out var sig)
+bool ok = MailgunWebhookSignatureValidator.IsValid(
+    signingKey:      parentSigningKey,
+    timestamp:       sig.Timestamp,
+    token:           sig.Token,
+    signature:       sig.Signature,
+    parentSignature: sig.ParentSignature,            // null for non-subaccount payloads
+    policy:          WebhookSignaturePolicy.AcceptEither,
+    maxAge:          TimeSpan.FromMinutes(15));
+```
+
+Policy options: `AcceptEither` (default — verify whichever field matches your key), `ChildSignatureOnly` (only the domain/subaccount-keyed `signature`), `ParentSignatureOnly` (only the `parent-signature`; rejects payloads without one). All three still require a valid HMAC under your configured key, so none weakens forgery resistance.
 
 ### Replay protection across multiple instances
 
@@ -447,12 +488,22 @@ Emitted span tags per request:
 | Tag | Value |
 |---|---|
 | `http.request.method` | `GET` / `POST` / … |
-| `url.full` | the full request URL |
+| `http.route` | the parameterized route template (e.g. `v3/{domain}/bounces/{address}`) |
+| `url.full` | **PII-redacted** URL — the route template, never the runtime path/query (see below) |
 | `server.address` | the Mailgun host (US or EU) |
 | `http.response.status_code` | the HTTP response status |
 | `mailgun.request_id` | `X-Mailgun-Request-Id` header (when present) |
 | `mailgun.rate_limit.remaining` | `X-RateLimit-Remaining` (when present) |
 | `exception.type` / `exception.message` | populated on failure |
+
+> **PII redaction.** `url.full` is deliberately set to the low-cardinality **route template**
+> (`https://api.mailgun.net/v3/{domain}/bounces/{address}`), not the raw request URL. Several Mailgun
+> endpoints carry recipient email addresses in the path (`/bounces/{address}`, `/complaints/{address}`,
+> `/unsubscribes/{address}`, mailing-list members) or the query (`/v4/address/validate?address=…`).
+> Emitting the raw URL would ship recipient PII to whatever tracing backend is attached — frequently a
+> third-party APM with broad access and long retention. The SDK substitutes the template (the same value
+> used for the low-cardinality `http.route` metric tag) so addresses never leave the process. This follows
+> OpenTelemetry's HTTP semantic conventions, which call for redacting sensitive values from `url.full`.
 
 ## OpenTelemetry metrics
 
@@ -495,6 +546,45 @@ builder.Services.AddMailgun(o =>
 // Inject IMailgunClient anywhere.
 ```
 
+### Production ASP.NET Core registration
+
+`AddMailgun` registers `IMailgunClient` as a **singleton** whose transport is the named
+`IHttpClientFactory` client (`MailgunServiceCollectionExtensions.HttpClientName == "Mailgun"`), so
+handler rotation, DNS refresh, and socket pooling follow standard .NET guidance — you do **not** manage
+`HttpClient` lifetime yourself. It returns the `IHttpClientBuilder`, so resilience and observability
+policies chain on top of the SDK's built-in 429 / idempotent-5xx retries:
+
+```csharp
+builder.Services
+    .AddMailgun(builder.Configuration)          // binds the "Mailgun" config section
+    .AddStandardResilienceHandler();            // Polly-backed retry/circuit-breaker (optional)
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(MailgunActivitySource.Name).AddOtlpExporter())
+    .WithMetrics(m => m.AddMeter(MailgunMeter.Name).AddOtlpExporter());
+```
+
+Every `MailgunClientOptions` value (including `AllowInsecureBaseUrl`, `MaxResponseContentBytes`,
+`OnResponse`, and `OnBehalfOf`) is honored identically whether you construct `MailgunClient` directly or
+through DI — the DI projection clones the full options object, so direct-vs-DI behavior never diverges.
+
+> **Options snapshot.** The singleton reads its options once at first resolve; rotating the API key in
+> `appsettings.json` after startup does not propagate to the running client. Rebuild the provider or
+> restart the process for a key rotation to take effect.
+
+## Configuration & resilience
+
+`MailgunClientOptions` controls the transport. Key knobs:
+
+| Option | Default | Behavior |
+|---|---|---|
+| `MaxRetries` | `3` | Retries on HTTP 429 (honoring `X-RateLimit-Reset`, then `Retry-After`, then exponential backoff with ±20 % jitter) and on idempotent-method 5xx (GET/HEAD/PUT/DELETE/OPTIONS — POSTs are never replayed). Action endpoints like DKIM `…/rotate` are excluded so a transient 5xx can't double-rotate. |
+| `Timeout` | `100 s` | Per-request timeout. Ignored when you supply your own `HttpClient` (you own its `Timeout`). |
+| `PooledConnectionLifetime` | `2 min` | The SDK-owned transport uses `SocketsHttpHandler` and recycles pooled connections on this cadence so a long-lived singleton client picks up DNS changes after a Mailgun failover. Ignored when you supply your own `HttpClient` (or use DI — `IHttpClientFactory` manages handler rotation). |
+| `MaxResponseContentBytes` | `64 MiB` | Hard cap on the response body the SDK buffers into memory; a compromised or MITM'd endpoint streaming an oversized body is rejected (`MailgunSerializationException`) instead of exhausting memory. Enforced even when you supply your own `HttpClient`. |
+| `AllowInsecureBaseUrl` | `false` | When `false`, a non-HTTPS, non-loopback `BaseUrl` throws at construction (the Basic-auth API key must not be sent in cleartext). Set `true` only for a trusted self-hosted gateway on a private network. |
+| `OnResponse` | `null` | Per-request callback (status, request id, rate-limit headers) that fires synchronously on the caller's flow — the concurrency-safe alternative to `LastResponseMetadata`. |
+
 ## Endpoint coverage
 
 The SDK ships **non-deprecated** endpoints only. Legacy surfaces explicitly **not** covered (use the modern replacement listed):
@@ -525,12 +615,8 @@ dotnet stryker
 
 The HTML report lands in `StrykerOutput/<timestamp>/reports/mutation-report.html`. Configuration is in [stryker-config.json](./stryker-config.json).
 
-Current baseline (round 9 — 445 tests, 1816 mutants reached by tests):
+The test suite is currently **638 tests** (net8.0 + net10.0). The mutation-score figures below are from the last full Stryker run captured in the progression table; the score moves as the SDK's code surface and the survivor-triage passes evolve, so treat the live [dashboard badge](https://dashboard.stryker-mutator.io/reports/github.com/AndreasLohr/mailgun-dotnet/main) at the top of this README as the source of truth and re-run `dotnet stryker` after substantial changes.
 
-- **Overall mutation score: 63.2%** (1143 killed / 592 survived / 4 timeout / 77 not covered by any test).
-- **Covered-code kill rate: 66.0%** on the mutants the test suite reaches.
-- **The score dropped from 75.4% → 63.2% between round 8 and round 9.** This is real, not noise: between the two runs the SDK added the OpenTelemetry metrics surface (v0.7.0), a `IDistributedCache`-backed webhook replay cache (v0.8.0), webhook crypto + multipart-copy hardening, and ~233 route-template literals across every service callsite. That code surface grew faster than the survivor-by-survivor triage pass that lifted earlier rounds — round 9 is the "feature snapshot, awaiting triage" data point, not a regression in test quality.
-- The 77 NoCoverage survivors and 592 covered-code survivors are dominated by mutations on the new code surface listed above. A targeted triage round (the same pattern that turned round 6 into round 7) is the next move to bring the score back above 75%.
 - **4 real bugs found and fixed during earlier survivor-by-survivor triage**: `Templates.CreateVersionAsync`, `InboxPlacement.CreateSeedlistAsync` / `CreateTestAsync`, `DynamicIpPools.CreateAsync`, and `Users.CreateAsync` were all missing required-field validation on their typed request DTOs (an empty `Name` / `Email` / `Tag` / `Seedlist` would have been sent to Mailgun as an empty string instead of throwing `ArgumentException` at the call site).
 
 Progression — each round expanded test coverage and reran Stryker:
@@ -546,6 +632,62 @@ Progression — each round expanded test coverage and reran Stryker:
 | + survivor triage: 4 bug fixes + blank-arg sweep + HTTP-client behavior + exact-retry-count tests | 305 | 979 | 283 | 73 | 73.9% |
 | + high-ROI NoCoverage killers: dead-code purge, missing `ListAllAsync` coverage, OpenTelemetry `ActivityListener` tests | 311 | 993 | 290 | 38 | 75.4% |
 | **v0.8.x feature snapshot** — OpenTelemetry metrics surface, distributed-cache replay protection, webhook crypto / multipart-copy hardening, Roslyn cardinality guardrail. New code surface added faster than survivor triage caught up; awaiting a dedicated triage round | 445 | 1143 | 592 | 77 | 63.2% |
+
+## Target frameworks & support matrix
+
+The SDK targets **`net8.0` (LTS)** and **`net10.0`** — both currently in Microsoft support. This is a
+deliberate modern-only policy: there is no `netstandard2.0` target.
+
+- **Rationale.** The SDK leans on modern BCL primitives that have no clean `netstandard2.0` equivalent —
+  `SocketsHttpHandler.PooledConnectionLifetime`, `CryptographicOperations.FixedTimeEquals`,
+  `JsonNamingPolicy.SnakeCaseLower` (.NET 8+), `IAsyncEnumerable<T>` pagination, `init`-only setters, and
+  nullable reference types. Backporting via polyfills would trade real safety/clarity for reach that
+  every in-support .NET runtime already provides. If you need an older runtime, pin an earlier SDK or
+  open an issue describing the target.
+- **CI** builds and runs the full test suite on **Ubuntu and Windows**, against **both** target
+  frameworks, on every push and PR (`.github/workflows/ci.yml`), plus a `.NET 8 SDK-only` job that
+  exercises the stricter .NET 8 analyzer baseline in isolation. Analyzer warnings are treated as errors
+  and nullable is clean.
+
+| Package | TFMs | Purpose |
+|---|---|---|
+| `mailgun-dotnet` | net8.0, net10.0 | Core client, all resource services, telemetry. Zero `Microsoft.Extensions.*` deps. |
+| `mailgun-dotnet.Extensions.DependencyInjection` | net8.0, net10.0 | `IServiceCollection.AddMailgun()` via `IHttpClientFactory`. |
+| `mailgun-dotnet.Webhooks` | net8.0, net10.0 | Typed webhook parsing + signature verification. |
+| `mailgun-dotnet.AspNetCore` | net8.0, net10.0 | `MapMailgunWebhook` endpoint helper. |
+| `mailgun-dotnet.Webhooks.DistributedCache` | net8.0, net10.0 | `IDistributedCache`-backed replay protection. |
+| `mailgun-dotnet.MimeKit` | net8.0, net10.0 | `SendMimeAsync(MimeMessage)` interop. |
+
+### Trimming & Native AOT
+
+The SDK serializes through reflection-based `System.Text.Json` — `MailgunClient` is annotated
+`[RequiresUnreferencedCode]` / `[RequiresDynamicCode]` to surface that to the compiler.
+
+- **Trimming** — works with `TrimMode=partial` when the SDK assembly is rooted (the default for a
+  referenced library). `TrimMode=full` will emit trim warnings and may drop reflection metadata at
+  runtime; either keep partial trimming or add `<TrimmerRootAssembly Include="Mailgun" />` (and the
+  companion assemblies you use).
+- **Native AOT is not supported.** This is intentional, not an oversight: the public surface exposes
+  arbitrary-shape Mailgun JSON as `Dictionary<string, object>` (webhook `user-variables`, alert
+  `settings`, and similar caller-defined blobs). `object`-typed serialization is inherently
+  runtime-typed and cannot be made AOT-safe without either dropping those fields or replacing them with
+  `JsonElement` — both worse for the 99% of users who never publish AOT. If first-class AOT matters to
+  you, open an issue; a source-generated `JsonSerializerContext` over the closed-shape DTOs (excluding
+  the `object` blobs) is the migration path under consideration.
+
+## Troubleshooting
+
+| Symptom | Likely cause & fix |
+|---|---|
+| `ArgumentException: …ApiKey is required` at construction | `ApiKey` is unset. In DI, ensure the `"Mailgun"` config section (or your `configureOptions`) sets it; `AddMailgun` validates it on first resolve. |
+| `ArgumentException: …BaseUrl must use HTTPS` | You set a non-HTTPS, non-loopback `BaseUrl`. Use `https://`, a loopback host for local tests, or set `AllowInsecureBaseUrl = true` for a trusted private gateway. |
+| `401 Unauthorized` from the API | Wrong key for the operation — sending keys only authorize `POST /v3/{domain}/messages[.mime]`; account-scoped calls need a primary/account key. Check you're using the right **region** (`MailgunRegion.Eu` → `api.eu.mailgun.net`); a US key on the EU host (or vice-versa) 401s. |
+| `MailgunRateLimitException` despite retries | The SDK already retried `MaxRetries` times honoring `X-RateLimit-Reset`. Back off further, lower send concurrency, or raise `MaxRetries`. Inspect `ex.RateLimit?.Reset`. |
+| `MailgunSerializationException: …exceeds the configured …-byte limit` | A response body exceeded `MaxResponseContentBytes` (default 64 MiB). Raise the cap if you legitimately fetch very large payloads, or investigate an unexpected/oversized response. |
+| Auto-pagination throws `MailgunSerializationException` mid-stream | A server-supplied `paging.next` link pointed off-origin or to a non-HTTPS URL; the SDK refuses to follow it (it would forward your API key). Expected hardening — not a bug. |
+| Webhook receiver returns `401` | Signature/timestamp check failed: wrong signing key, clock skew beyond `MaxClockSkew`, or (for subaccount domains) you configured a child key but receive `parent-signature` only — use the parent key with the default `AcceptEither` policy. |
+| Webhook receiver returns `409` | Replay protection rejected a token already seen within the window. Behind multiple instances, wire up `mailgun-dotnet.Webhooks.DistributedCache` so all instances share the seen-token set. |
+| `LastResponseMetadata` shows another request's data | It's a single shared field — unsafe under concurrency (e.g. the DI singleton). Use the `OnResponse` callback, which fires per-request on the caller's flow. |
 
 ## License
 
